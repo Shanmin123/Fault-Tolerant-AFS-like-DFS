@@ -1,3 +1,16 @@
+"""
+A robust RPC client implementation using length-prefixed JSON framing.
+
+This module provides an RPCClient class to perform remote procedure calls
+over TCP connections. It is designed to be minimal and robust, featuring
+mechanisms like per-call timeouts, exponential backoff retries, and round-robin
+server selection. Each server call uses a unique TCP connection, avoiding
+connection lifecycle issues and simplifying its usage.
+
+Call responses from the server are expected to be in a structured JSON format,
+and include attributes like latency for observability. In case of failures,
+synthetic responses are returned for better client-side handling.
+"""
 import asyncio
 import time
 import uuid

@@ -1,4 +1,23 @@
+"""
+A minimal asynchronous RPC server with JSON framing.
 
+This module defines a simple RPC server that listens for incoming TCP
+connections and handles JSON-based RPC requests over a length-prefixed
+framing. Each RPC request must include an operation identifier (`op`)
+that maps to a registered handler function. Responses are JSON objects
+that include metadata such as execution time and request correlation IDs.
+
+Error handling is built into the server, ensuring that unexpected
+exceptions in handler execution do not compromise the server loop.
+
+Exported classes:
+- RPCServer: A basic RPC server with support for registration of
+  asynchronous request handlers and one-to-one request-response
+  communication.
+
+The architecture uses asyncio to provide concurrent handling of multiple
+connections without additional threading or multiprocessing logic.
+"""
 
 import asyncio
 import uuid
