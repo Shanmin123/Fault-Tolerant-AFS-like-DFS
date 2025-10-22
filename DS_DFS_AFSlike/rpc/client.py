@@ -5,8 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from rpc.framing import write_frame, read_frame
 
-# Return codes that the server uses; the client does not enforce them,
-# but we mirror the values so callers can check "code == 0" easily.
+# Return codes that the server uses;
 OK = 0
 E_TIMEOUT = 1001
 
@@ -15,14 +14,12 @@ class RPCClient:
     """
     Minimal, robust RPC client using length-prefixed JSON framing.
 
-    Design choices:
-      - One TCP connection per call (simple and reliable for coursework).
+    Design:
+      - One TCP connection per call
         This avoids connection lifecycle bugs and is good enough for demos.
       - Call-level timeout with asyncio.wait_for.
       - Basic retry with exponential backoff and round-robin across server list.
 
-    If you later need higher throughput, you can implement a connection pool
-    (keep one connection per target server, plus a background receive loop).
     """
 
     def __init__(
