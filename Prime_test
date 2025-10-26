@@ -1,4 +1,4 @@
-def prime_test(n: int) -> bool:
+def prime_test(n):
     #n: number need to test.
     #Return: Ture means n is prime, False means not.
     if n < 2:
@@ -30,3 +30,37 @@ def prime_test(n: int) -> bool:
         else:
             return False
     return True
+
+# preprocessing of file (separate as some chunks, the best size of each chunk need to test).
+def chunk_offset(file_path,chunk_line):
+    offset = []
+    with open(file_path,'rb') as f:
+        line_count=0
+        start_offset=0
+        while True:
+            line=f.readline()
+            if not line:
+                if line_count>0:
+                    offset.append((start_offset,line_count))
+                break
+            line_count+=1
+            if line_count==chunk_line:
+                offset.append((start_offset,line_count))
+                start_offset=f.tell()
+                line_count=0
+    return offset
+
+#need to determine
+def worker():
+def coordinator():
+
+#optimize,eg for the chunk_line size
+import time
+if __name__ == '__main__':
+    start_time = time.time()
+    '''
+    '''
+    end_time = time.time()
+    print('Total time cost:', end_time-start_time)
+
+
