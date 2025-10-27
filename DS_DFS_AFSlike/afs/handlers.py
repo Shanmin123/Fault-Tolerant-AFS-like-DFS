@@ -60,7 +60,7 @@ async def Open(path: str, flags: int = 0):
 
 #ADD: Create operation for new files
 async def Create(path: str):
-    norm = norm(path)
+    norm = _norm(path)
     fp = _fs_path(norm)
     if norm in _meta and fp.exists():
         raise FileExistsError(f"File exists:{norm}")
