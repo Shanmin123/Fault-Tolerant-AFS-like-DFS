@@ -1,15 +1,22 @@
 # run_afs_server.py
 import asyncio
 from rpc.server import RPCServer
-from afs.handlers import Open, TestAuth, GetFile, PutFile
+from afs.handlers import Open, TestAuth, GetFile, PutFile, Create
+import sys
 
 async def main():
+    #ADD: comman-line arg for replication test
+    host = sys.argv[1] if len(sys.argv) > 1 else "127.0.0.1"
+    port = int(sys.argv[2]) if len(sys.argv) > 2 else 8888
+
     srv = RPCServer()
     srv.register("Open", Open)
     srv.register("TestAuth", TestAuth)
     srv.register("GetFile", GetFile)
     srv.register("PutFile", PutFile)
-    await srv.serve("127.0.0.1", 8888)
+    #ADD
+    srv.register("Create", Create)
+    await srv.serve(host, port)
 
 if __name__ == "__main__":
     asyncio.run(main())

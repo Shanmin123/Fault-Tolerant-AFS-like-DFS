@@ -58,6 +58,22 @@ async def Open(path: str, flags: int = 0):
     e = _meta[norm]
     return {"handle": 1, "version": int(e["version"]), "size": int(e["size"])}
 
+#ADD: Create operation for new files
+async def Create(path: str):
+    norm = _norm(path)
+    fp = _fs_path(norm)
+    if norm in _meta and fp.exists():
+        raise FileExistsError(f"File exists:{norm}")
+    #create empty file
+    fp.parent.mkdir(parents=True, exist_ok=True)
+    fp.write_bytes(b"")
+    #initialize metadata
+    _meta[norm] = {"version": 1,
+                   "size": 0,
+                   "sha256": _sha256(b"")}
+    _save_meta()
+    return {"handle": 1, "version": 1, "size": 0}
+
 async def TestAuth(path: str, client_version: int):
     norm = _norm(path)
     e = _meta.get(norm)
