@@ -1,3 +1,6 @@
+import socket
+import pickle
+
 def send_data(conn, data_part):
     load=pickle.dumps(data_part)
     data_len = len(load).to_bytes(8, 'big')
