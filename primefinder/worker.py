@@ -1,6 +1,7 @@
 import socket
 import pickle
 from prime_test import prime_test
+from send_recv import send_data, recv_data
 
 HOST = 'localhost'
 PORT = 5000
@@ -19,4 +20,5 @@ def worker_main():
     s.close()
 if __name__ == "__main__":
     worker_main()
+
 
