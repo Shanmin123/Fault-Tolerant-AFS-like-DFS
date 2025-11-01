@@ -1,6 +1,6 @@
 import socket
 import pickle
-from prime import is_prime
+from prime_test import prime_test
 
 HOST = 'localhost'
 PORT = 5000
@@ -10,14 +10,13 @@ def worker_main():
     s.connect((HOST, PORT))
     print("Connected to coordinator")
 
-    data = s.recv(4096)
-    numbers = pickle.loads(data)
-
-
-    primes = {n for n in numbers if is_prime(n)}
-
-    s.sendall(pickle.dumps(primes))
+    numbers = recv_data(s)
+    primes=[]
+    for i in numbers:
+        if prime_test(i):
+            primes.append(i)
+    send_data(s, primes)
     s.close()
-
 if __name__ == "__main__":
     worker_main()
+
