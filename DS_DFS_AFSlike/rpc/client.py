@@ -38,7 +38,11 @@ class RPCClient:
     def __init__(
         self,
         servers: List[str],
-        timeout: float = 3.0,
+        connect_timeout: float = 0.20,
+        read_timeout: float = 0.60,
+        write_timeout: float = 0.10,
+        deadline_sec: Optional[float] = 1.80,
+
         retries: int = 1,
         backoff_base: float = 0.2,
     ) -> None:
@@ -52,7 +56,12 @@ class RPCClient:
         if not servers:
             raise ValueError("servers list must not be empty")
         self._servers = servers
-        self._timeout = timeout
+        self._connect_timeout = connect_timeout
+        self._read_timeout = read_timeout
+        self._write_timeout = write_timeout
+        self._deadline_sec = deadline_sec
+
+
         self._retries = retries
         self._backoff_base = backoff_base
 
@@ -69,7 +78,7 @@ class RPCClient:
         host, port_s = target.split(":")
         return host, int(port_s)
 
-    async def call(self, op: str, args: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def call(self, op: str, args: Optional[Dict[str, Any]] = None, *, op_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Perform a single RPC call:
           - Build request JSON {"op","req_id","args"}.
@@ -87,24 +96,42 @@ class RPCClient:
         req_id = str(uuid.uuid4())
         req = {"op": op, "req_id": req_id, "args": (args or {})}
 
+        # attach user-supplied op_id so the server can de-duplicate
+        if op_id is not None:
+            _args = dict(req["args"])
+            _args.setdefault("op_id", op_id)
+            req["args"] = _args
+
+        #  Fault Tolerance: pass end-to-end deadline to the server for adaptive timeout/cancellation
+        if self._deadline_sec is not None:
+            req["deadline_ms"] = int(self._deadline_sec * 1000)
+
         # Attempt (retries + 1) times at most.
         for attempt in range(self._retries + 1):
             host, port = self._choose_server()
             try:
                 # Open a fresh connection for this attempt.
-                reader, writer = await asyncio.open_connection(host, port)
+                reader, writer = await asyncio.wait_for( asyncio.open_connection(host, port),
+                                       timeout = self._connect_timeout)
 
                 t0 = time.perf_counter()
-                await write_frame(writer, req)
+
+                await asyncio.wait_for(write_frame(writer, req), timeout=self._write_timeout)
 
                 # Read response with a timeout; the server replies one frame per request.
-                resp = await asyncio.wait_for(read_frame(reader), timeout=self._timeout)
+                resp = await asyncio.wait_for(read_frame(reader), timeout=self._read_timeout)
                 latency_ms = int((time.perf_counter() - t0) * 1000)
 
                 # Close proactively; we do not reuse the connection in this simple client.
-                writer.close()
 
                 # Attach latency for observability on the client side.
+                # close
+                try:
+                    writer.close()
+                    await writer.wait_closed()
+                except Exception:
+                    pass
+
                 if isinstance(resp, dict):
                     resp["latency_ms"] = latency_ms
                 return resp
