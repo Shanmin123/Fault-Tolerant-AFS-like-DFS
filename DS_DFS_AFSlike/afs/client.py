@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Dict, Optional
 from rpc.client import RPCClient
-
+import uuid
 
 class LocalCache:
     """
@@ -58,8 +58,6 @@ class AFSClient:
     Thin wrapper on top of RPCClient to provide AFS operations.
     - open_sync_read(path): keep cache up-to-date
     - put(path): upload changes using optimistic concurrency
-
-    ADD:
     - open(path, mode) -> fd
     - create(path) -> fd
     - read(fd, size) -> bytes
@@ -70,11 +68,9 @@ class AFSClient:
     def __init__(self, rpc: RPCClient, cache: Optional[LocalCache] = None):
         self.rpc = rpc
         self.cache = cache or LocalCache()
-        #ADD
         self._next_fd = 1
         self._open_files: Dict[int, Dict] = {}
 
-    #ADD: path normalization+open()+create()+read()+write()
     def _normalize_path(self, path: str) -> str:
         #path start with /
         if not path.startswith("/"):
@@ -142,8 +138,10 @@ class AFSClient:
         """create a new file and return file descriptor"""
         path = self._normalize_path(path)
         local_path = self.cache.fs_path(path)
+        op_id = f"create-{path}-{uuid.uuid4()}"
         try:
-            r = await self.rpc.call("Create", {"path": path})
+            #pass op_id
+            r = await self.rpc.call("Create", {"path": path}, op_id=op_id)
             if r["code"] != 0:
                 raise FileExistsError(f"Cannot create {path}: {r['err']}")
             server_ver = int(r["data"]["version"])

@@ -21,7 +21,9 @@ from rpc.framing import write_frame, read_frame
 # Return codes that the server uses;
 OK = 0
 E_TIMEOUT = 1001
-
+E_CONNECT_FAILED = 1002
+E_WRITE_FAILED = 1003
+E_READ_FAILED = 1004
 
 class RPCClient:
     """
@@ -106,48 +108,82 @@ class RPCClient:
         if self._deadline_sec is not None:
             req["deadline_ms"] = int(self._deadline_sec * 1000)
 
+        last_error_code = E_TIMEOUT
+        last_error_msg = "TIMEOUT"
+
         # Attempt (retries + 1) times at most.
         for attempt in range(self._retries + 1):
             host, port = self._choose_server()
+
+            #PHASE 1: CONNECT
             try:
                 # Open a fresh connection for this attempt.
                 reader, writer = await asyncio.wait_for( asyncio.open_connection(host, port),
                                        timeout = self._connect_timeout)
+            except asyncio.TimeoutError:
+                last_error_code = E_CONNECT_FAILED
+                last_error_msg = f"CONNECTION_TIMEOUT to {host}:{port}"
+                if attempt < self._retries:
+                    await asyncio.sleep(self._backoff_base * (2 ** attempt))
+                    continue
+                return {"req_id": req_id, "code": last_error_code, "err": last_error_msg, "data": None}
+            except ConnectionRefusedError:
+                last_error_code = E_CONNECT_FAILED
+                last_error_msg = f"CONNECTION_REFUSED by {host}:{port}"
+                if attempt < self._retries:
+                    await asyncio.sleep(self._backoff_base * (2 ** attempt))
+                    continue
+                return {"req_id": req_id, "code": last_error_code, "err": last_error_msg, "data": None}
+            except OSError as e:
+                last_error_code = E_CONNECT_FAILED
+                last_error_msg = f"CONNECTION_ERROR to {host}:{port}: {e}"
+                if attempt < self._retries:
+                    await asyncio.sleep(self._backoff_base * (2 ** attempt))
+                    continue
+                return {"req_id": req_id, "code": last_error_code, "err": last_error_msg, "data": None}
 
+            try:
                 t0 = time.perf_counter()
 
-                await asyncio.wait_for(write_frame(writer, req), timeout=self._write_timeout)
+                #PHASE 2: WRITE REQUEST
+                try:
+                    await asyncio.wait_for(write_frame(writer, req), timeout=self._write_timeout)
+                except asyncio.TimeoutError:
+                    last_error_code = E_WRITE_FAILED
+                    last_error_msg = f"WRITE_TIMEOUT to {host}:{port}"
+                    raise  # Jump to outer exception handler for retry
+                except Exception as e:
+                    last_error_code = E_WRITE_FAILED
+                    last_error_msg = f"WRITE_ERROR to {host}:{port}: {e}"
+                    raise
 
-                # Read response with a timeout; the server replies one frame per request.
-                resp = await asyncio.wait_for(read_frame(reader), timeout=self._read_timeout)
+                #PHASE 3: READ RESPONSE
+                try:
+                    resp = await asyncio.wait_for(read_frame(reader), timeout=self._read_timeout)
+                except asyncio.TimeoutError:
+                    last_error_code = E_READ_FAILED
+                    last_error_msg = f"READ_TIMEOUT from {host}:{port}"
+                    raise  # Jump to outer exception handler for retry
+                except Exception as e:
+                    last_error_code = E_READ_FAILED
+                    last_error_msg = f"READ_ERROR from {host}:{port}: {e}"
+                    raise
+
                 latency_ms = int((time.perf_counter() - t0) * 1000)
-
-                # Close proactively; we do not reuse the connection in this simple client.
-
-                # Attach latency for observability on the client side.
-                # close
+                if isinstance(resp, dict):
+                    resp["latency_ms"] = latency_ms
+                return resp
+            except (asyncio.TimeoutError, Exception):
+                if attempt < self._retries:
+                    await asyncio.sleep(self._backoff_base * (2 ** attempt))
+                    continue
+                return {"req_id": req_id, "code": last_error_code, "err": last_error_msg, "data": None}
+            
+            finally:
                 try:
                     writer.close()
                     await writer.wait_closed()
                 except Exception:
                     pass
 
-                if isinstance(resp, dict):
-                    resp["latency_ms"] = latency_ms
-                return resp
-
-            except asyncio.TimeoutError:
-                # Timed out waiting for response → retry if allowed.
-                if attempt < self._retries:
-                    await asyncio.sleep(self._backoff_base * (2 ** attempt))
-                    continue
-                # No more retries: synthesize a timeout response.
-                return {"req_id": req_id, "code": E_TIMEOUT, "err": "TIMEOUT", "data": None}
-
-            except Exception as e:
-                # Any network/serialization error: retry if allowed.
-                if attempt < self._retries:
-                    await asyncio.sleep(self._backoff_base * (2 ** attempt))
-                    continue
-                # Final failure: still return a timeout-like shape for simplicity.
-                return {"req_id": req_id, "code": E_TIMEOUT, "err": f"NETWORK_ERROR: {e}", "data": None}
+        return {"req_id": req_id, "code": last_error_code, "err": last_error_msg, "data": None}

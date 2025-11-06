@@ -82,6 +82,14 @@ class RPCServer:
         )
         await self._db.commit()
 
+    def _log(self, peer, req_id: str, op: str, stage: str, **kwargs) -> None:
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        peer_str = f"{peer[0]}:{peer[1]}" if peer else "unknown"
+        parts = [f"[{timestamp}]", f"[{peer_str}]", f"[{req_id[:8]}]", f"[{op}]", f"[{stage}]"]
+        for key, value in kwargs.items():
+            parts.append(f"{key}={value}")
+        print(" ".join(parts))
+
     async def _handle_conn(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         """
         Per-connection loop:
@@ -101,6 +109,9 @@ class RPCServer:
                 args = req.get("args", {}) or {}                # parameters as a dict
                 rid = req.get("req_id", str(uuid.uuid4()))      # correlate request/response
 
+                #log request start
+                self._log(peer, rid, op, "START", args_count=len(args))
+
                 # BUSINESS IDEMPOTENCY (op_id): check persistent store first
                 op_id = args.pop("op_id", None)
                 if op_id is not None:
@@ -110,6 +121,8 @@ class RPCServer:
                     if row:
                         prev = json.loads(row[0])
                         resp = {"req_id": rid, "code": OK, "err": "", "data": prev, "ms": 0}
+                        #log cache hit
+                        self._log(peer, rid, op, "CACHED", op_id=op_id)
                         await write_frame(writer, resp)
                         continue
 
@@ -121,21 +134,29 @@ class RPCServer:
                 fn = self._handlers.get(op)
                 if fn is None:
                     resp = {"req_id": rid, "code": E_INTERNAL, "err": f"unknown op '{op}'"}
+                    #log unknown operation
+                    self._log(peer, rid, op, "ERROR", reason="unknown_op")
                     await write_frame(writer, resp)
                     continue
 
                 # 4) Execute the handler safely; enforce remaining deadline if provided.
                 try:
+                    #log execution start
+                    self._log(peer, rid, op, "EXECUTING", deadline_ms=deadline_ms)
                     # Compute remaining time budget (seconds) if client supplied deadline_ms
                     if isinstance(deadline_ms, (int, float)):
                         remain = (deadline_ms / 1000.0) - (time.perf_counter() - t_req)
                         if remain <= 0:
                             resp = {"req_id": rid, "code": E_TIMEOUT, "err": "DEADLINE_EXCEEDED"}
+                            #log deadline exceeded
+                            self._log(peer, rid, op, "TIMEOUT", reason="deadline_exceeded_before_exec")
                         else:
                             t0 = time.perf_counter()
                             data = await asyncio.wait_for(fn(**args), timeout=remain)
                             ms = int((time.perf_counter() - t0) * 1000)
                             resp = {"req_id": rid, "code": OK, "err": "", "data": data, "ms": ms}
+                            #lg success
+                            self._log(peer, rid, op, "SUCCESS", exec_ms=ms)
                             # Persist business idempotency result (op_id-based)
                             if op_id is not None:
                                 payload = json.dumps(data, separators=(",", ":"), ensure_ascii=False)
@@ -152,6 +173,8 @@ class RPCServer:
                         data = await fn(**args)
                         ms = int((time.perf_counter() - t0) * 1000)
                         resp = {"req_id": rid, "code": OK, "err": "", "data": data, "ms": ms}
+                        #log success
+                        self._log(peer, rid, op, "SUCCESS", exec_ms=ms)
                         # Persist business idempotency result (op_id-based)
                         if op_id is not None:
                             payload = json.dumps(data, separators=(",", ":"), ensure_ascii=False)
@@ -165,9 +188,13 @@ class RPCServer:
                 except asyncio.TimeoutError:
                     # Handler exceeded remaining deadline
                     resp = {"req_id": rid, "code": E_TIMEOUT, "err": "TIMEOUT"}
+                    #log timeout
+                    self._log(peer, rid, op, "TIMEOUT", reason="handler_timeout")
                 except Exception as e:
                     # Map any unhandled exception to a generic INTERNAL error.
                     resp = {"req_id": rid, "code": E_INTERNAL, "err": str(e)}
+                    #log error with exception details
+                    self._log(peer, rid, op, "ERROR", exception=str(e)[:100])
 
                 # 5) Send the response as one framed JSON message.
                 await write_frame(writer, resp)
@@ -195,3 +222,5 @@ class RPCServer:
         print(f"[server] RPC server listening on {addr}")
         async with server:
             await server.serve_forever()
+
+    
