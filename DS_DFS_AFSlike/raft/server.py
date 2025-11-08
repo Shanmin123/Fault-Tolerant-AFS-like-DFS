@@ -4,7 +4,7 @@ Integrates Raft consensus with the AFS RPC server for replicated file storage.
 """
 import asyncio
 import sys
-from typing import Optional, List
+from typing import Optional, List, Dict
 from afs.handlers import Open, TestAuth, Create, GetFile, PutFile
 from rpc.server import RPCServer
 from rpc.framing import read_frame, write_frame
@@ -24,6 +24,14 @@ class RaftServer:
     self.raft = RaftNode(node_id, peer_adr=peers, storage_dir=f"{storage_dir}/raft")
     self.raft_rpc = RaftRPC(node_id)
     self.rpc_server = RPCServer()
+    #track last known leader
+    self.last_leader: Optional[str] = None
+    self.peer_adr: Dict[str, str] = {}
+    for i, peer in enumerate(peers):
+      peer_id = f"server{i+2}" if node_id == "server1" else f"server{i+1}"
+      self.peer_adr[peer_id] = peer
+    self.peer_adr[node_id] = f"{host}:{port}"
+
     #register handlers
     self._handlers()
     self.rpc_server.register("VoteRequest", self.handle_request_vote)
@@ -48,6 +56,10 @@ class RaftServer:
     return {"is_vote": vote, "term": current_term}
 
   async def handle_append_entries(self, term: int, leader_id: str, prev_log_id: int, prev_log_term: int, entries: list, leader_commit: int) -> dict:
+    #track the leader for _get_last_leader()
+    if term >= self.raft.current_term:
+      self.last_leader = leader_id
+      
     success, current_term = self.raft.append_entries(term, leader_id, prev_log_id, prev_log_term, entries, leader_commit)
     self.raft.apply_commited_entries()
     return {"success": success, "term": current_term}
@@ -138,7 +150,15 @@ class RaftServer:
     if self.heartbeat_task: self.heartbeat_task.cancel()
 
   def _get_last_leader(self) -> Optional[str]:
-    return None  
+    """
+    clients find the leader by reaching to the address of last known leader, rather than try all servers
+    Return: leader address or None
+    """
+    if self.raft.state == Node.LEADER:
+      return f"{self.host}:{self.port}"
+    if self.last_leader:
+      return self.peer_adr.get(self.last_leader)
+    return None
 
 if __name__ == "__main__":
   if len(sys.argv) < 4:
