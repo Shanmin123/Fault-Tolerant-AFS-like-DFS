@@ -59,17 +59,52 @@ class RaftServer:
     #track the leader for _get_last_leader()
     if term >= self.raft.current_term:
       self.last_leader = leader_id
-      
+
     success, current_term = self.raft.append_entries(term, leader_id, prev_log_id, prev_log_term, entries, leader_commit)
     self.raft.apply_commited_entries()
     return {"success": success, "term": current_term}
     
   def apply_to_state_machine(self, entry):
+    """
+    Apply a commited log entry to AFS state machine
+    Use op_id idempotency to ensure operations are only applied once even called multiple times    
+    """
     command = entry.command
     op = command["op"]
     args = command["args"]
     print(f"[RaftAFS-{self.node_id}] Applying {op} at index {entry.index}")
-    
+    #idempotency
+    op_id = f"raft-{entry.index}"
+    try:
+      if op == "Create":
+        asyncio.create_task(self.apply_create_idem(args, op_id))
+      elif op == "PutFile":
+        asyncio.create_task(self.apply_put_idem(args, op_id))
+      else:
+        print(f"[RaftAFS-{self.node_id}] Unknown operation: {op}")
+    except Exception as e:
+      print(f"[RaftAFS-{self.node_id}] Error applying {op}: {e}")
+  async def apply_create_idem(self, args: dict, op_id: str):
+    try:
+      result = await Create(**args)
+      print(f"[RaftAFS-{self.node_id}] Applied Create: {args['path']}")
+    except FileExistsError:
+      print(f"[RaftAFS-{self.node_id}] Create idempotent (already exists): {args['path']}")
+    except Exception as e:
+      print(f"[RaftAFS-{self.node_id}] Failed to apply Create: {e}")
+  async def apply_put_idem(self, args: dict, op_id: str):
+    try:
+      result = await PutFile(**args)
+      print(f"[RaftAFS-{self.node_id}] Applied PutFile: {args['path']}")
+    except ValueError as e:
+      if "version conflict" in str(e):
+        #alreafy applied
+        print(f"[RaftAFS-{self.node_id}] PutFile idempotent (version conflict): {args['path']}")
+      else:
+        raise
+    except Exception as e:
+      print(f"[RaftAFS-{self.node_id}] Failed to apply PutFile: {e}")
+
   async def handle_create(self, path: str, **kwargs) -> dict:
     if self.raft.state != Node.LEADER:
       return  {"error": "not_leader", "leader_hint": self._get_last_leader()}
