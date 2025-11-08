@@ -11,11 +11,11 @@ A fault-tolerant, replicated distributed file system inspired by the Andrew File
 - [Overview](#overview)
 - [Key Features](#key-features)
 - [Project Structure](#project-structure)
-- [Setup](#setup)
 - [Usage](#usage)
-  - [Single Server Mode](#single-server-mode)
-  - [Replicated Mode (Raft)](#replicated-mode-raft)
-- [Testing](#testing)
+  - [Single Server Testing](#single-server-testing)
+  - [Raft Cluster Testing](#raft-cluster-testing)
+  - [Fault Tolerance Testing](#fault-tolerance-testing)
+  - [Raft Testing](#raft-testing)
 - [Fault Tolerance](#fault-tolerance)
 - [Raft Configuration](#raft-consensus)
 
@@ -29,6 +29,8 @@ This project implements a distributed file system with the following components:
 2. **MiniRPC Framework**: Lightweight RPC system using asyncio and length-prefixed JSON protocol
 3. **Fault Tolerance**: Comprehensive error handling, timeouts, retries, and idempotency
 4. **Raft Consensus**: Leader election and log replication for high availability
+
+---
 
 ## Key Features
 
@@ -54,37 +56,44 @@ This project implements a distributed file system with the following components:
 - **Crash recovery**: Persistent Raft state survives restarts
 - **Split-brain prevention**: Majority quorum required for all operations
 
+---
+
 ## Project structure
 ```
 DFS/
 ├── afs/
 │   ├── __init__.py
-│   ├── client.py               # AFS client with POSIX API + caching
-│   └── handlers.py             # Server handlers
-├── cache/                      # Client-side cache
-│   ├── .meta.json              # Version tracking
-│   └── demo.txt                # Cached files
-├── raft/                       # Raft consensus
+│   ├── client.py                   # AFS client with POSIX API + caching
+│   └── handlers.py                 # Server handlers
+├── cache/                          # Client-side cache
+│   ├── .meta.json                  # Version tracking
+│   └── demo.txt                    # Cached files
+├── raft/                           # Raft consensus
 │   ├── __init__.py
-│   ├── rpc.py                  # Raft RPC communication
-│   ├── server.py               # Raft-enabled AFS server
-│   └── state.py                # Raft state machine (election, log)
+│   ├── rpc.py                      # Raft RPC communication
+│   ├── server.py                   # Raft-enabled AFS server
+│   └── state.py                    # Raft state machine (election, log)
 ├── rpc/
 │   ├── __init__.py
-│   ├── client.py               # RPC client with failover
-│   ├── framing.py              # JSON framing protocol
-│   └── server.py               # Async RPC server
-├── srv_data/                   # Server storage (single server)
-│   ├── .meta.json              # File metadata
-│   └── demo.txt                # Stored files
-├── afs_client_demo.py          # High-level API demo
-├── afs_smoke.py                # Low-level RPC test
-├── api_demo.py                 # POSIX API demo
-├── Client demo_idempotency
-├── oplog.db                    # Idempotency log (SQLite)
-├── raft_test.py                # Raft replication tests
-└── run_afs_server.py           # Single Server startup
+│   ├── client.py                   # RPC client with failover
+│   ├── framing.py                  # JSON framing protocol
+│   └── server.py                   # Async RPC server
+├── srv_data/                       # Server storage (single server)
+│   ├── .meta.json                  # File metadata
+│   └── demo.txt                    # Stored files
+├── afs_client_demo.py              # High-level API demo
+├── afs_smoke.py                    # Low-level RPC test
+├── api_demo.py                     # POSIX API demo
+├── oplog.db                        # Idempotency log (SQLite)
+├── run_afs_server.py               # Single Server startup
+├── test_afs_idempotency_client.py
+├── test_basic_operations.py
+├── test_cache_validation.py
+├── test_connect_cluster.py
+└── test_raft.py
 ```
+
+---
 
 ## Setup
 
@@ -108,9 +117,11 @@ mkdir -p cache
 echo "Initial file content" > srv_data/demo.txt
 ```
 
+---
+
 ## Usage
 
-## Test Files Overview
+### Test Files Overview
 
 | Test File | Purpose | Requires |
 |-----------|---------|----------|
@@ -123,9 +134,9 @@ echo "Initial file content" > srv_data/demo.txt
 | `test_afs_idempotency_client.py` | Idempotency testing | Single server |
 
 
-## Single Server Testing
+### Single Server Testing
 
-### Setup
+#### Setup
 ```bash
 # Default (127.0.0.1:8888)
 python run_afs_server.py
@@ -134,7 +145,7 @@ python run_afs_server.py
 python run_afs_server.py 0.0.0.0 9999
 ```
 
-### Run Tests
+#### Run Tests
 ```bash
 # Basic operations
 python test_basic_operations.py
@@ -152,9 +163,9 @@ python afs_client_demo.py
 python api_demo.py
 ```
 
-## Raft Cluster Testing
+### Raft Cluster Testing
 
-### Setup (3 Terminals)
+#### Setup (3 Terminals)
 ```bash
 # Terminal 1: Server 1
 python -m raft.server server1 127.0.0.1 8888 127.0.0.1:8889 127.0.0.1:8890
@@ -168,7 +179,7 @@ python -m raft.server server3 127.0.0.1 8890 127.0.0.1:8888 127.0.0.1:8889
 
 **Wait for Leader Election:** `[Raft-serverX] Became leader for term N`
 
-### Run Tests (Terminal 4)
+#### Run Tests (Terminal 4)
 ```bash
 # Simple connection test
 python test_connect_cluster.py
@@ -180,7 +191,7 @@ python test_basic_operations.py --raft
 python test_raft_cluster.py
 ```
 
-## Fault Tolerance Testing
+### Fault Tolerance Testing
 
 **Test 1: Server Crash**
 ```bash
@@ -245,6 +256,8 @@ python test_afs_idempotency_client.py
 # 5. Files are consistent across all servers
 ```
 
+---
+
 ## Fault Tolerance
 
 ### Error Handling Strategy
@@ -283,6 +296,8 @@ RPCClient(
 | 1003 | E_WRITE_FAILED | Send failed | Retry |
 | 1004 | E_READ_FAILED | Receive failed | Retry |
 | 1999 | E_INTERNAL | Server error | Report to user |
+
+---
 
 ## Raft Consensus
 
