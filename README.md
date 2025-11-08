@@ -110,9 +110,22 @@ echo "Initial file content" > srv_data/demo.txt
 
 ## Usage
 
-### Single Server Mode
+## Test Files Overview
 
-**Start Server:**
+| Test File | Purpose | Requires |
+|-----------|---------|----------|
+| `test_basic_operations.py` | Create, write, read, close operations | Single server or Raft |
+| `test_cache_validation.py` | Cache hit/miss with TestAuth | Single server |
+| `test_connect_cluster.py` | Simple Raft connection test | 3 Raft servers |
+| `test_raft.py` | Full Raft test suite | 3 Raft servers |
+| `afs_smoke.py` | Low-level RPC smoke test | Single server |
+| `api_demo.py` | POSIX API demo | Single server |
+| `test_afs_idempotency_client.py` | Idempotency testing | Single server |
+
+
+## Single Server Testing
+
+### Setup
 ```bash
 # Default (127.0.0.1:8888)
 python run_afs_server.py
@@ -121,8 +134,14 @@ python run_afs_server.py
 python run_afs_server.py 0.0.0.0 9999
 ```
 
-**Run Client:**
+### Run Tests
 ```bash
+# Basic operations
+python test_basic_operations.py
+
+# Cache validation
+python test_cache_validation.py
+
 # Low-level RPC test
 python afs_smoke.py
 
@@ -133,10 +152,9 @@ python afs_client_demo.py
 python api_demo.py
 ```
 
-### Replicated Mode (Raft)
+## Raft Cluster Testing
 
-**Start 3-Server Cluster:**
-
+### Setup (3 Terminals)
 ```bash
 # Terminal 1: Server 1
 python -m raft.server server1 127.0.0.1 8888 127.0.0.1:8889 127.0.0.1:8890
@@ -148,87 +166,21 @@ python -m raft.server server2 127.0.0.1 8889 127.0.0.1:8888 127.0.0.1:8890
 python -m raft.server server3 127.0.0.1 8890 127.0.0.1:8888 127.0.0.1:8889
 ```
 
-**Wait for Leader Election:**
-Watch for log message:
-```
-[Raft-server1] Became leader for term 1
-```
+**Wait for Leader Election:** `[Raft-serverX] Became leader for term N`
 
-**Connect Client to Cluster:**
-```python
-import asyncio
-from rpc.client_rpc import RPCClient
-from afs.client import AFSClient
-
-async def main():
-    # Client connects to all servers
-    rpc = RPCClient([
-        "127.0.0.1:8888",
-        "127.0.0.1:8889",
-        "127.0.0.1:8890"
-    ])
-    
-    afs = AFSClient(rpc)
-    
-    # Create file (goes through Raft consensus)
-    fd = await afs.create("/myfile.txt")
-    afs.write(fd, b"Hello Raft!\n")
-    await afs.close(fd)  # Replicated to majority
-
-asyncio.run(main())
-```
-
-**Run Raft Tests:**
+### Run Tests (Terminal 4)
 ```bash
+# Simple connection test
+python test_connect_cluster.py
+
+# Basic operations through Raft
+python test_basic_operations.py --raft
+
+# Full Raft test suite
 python test_raft_cluster.py
 ```
 
-
-## Cache testing
-```bash
-# Terminal 1: Start server
-python run_afs_server.py
-
-# Terminal 2: First client - creates file
-python -c "
-import asyncio
-from rpc.client import RPCClient
-from afs.client import AFSClient
-
-async def test():
-    afs = AFSClient(RPCClient(['127.0.0.1:8888']))
-    fd = await afs.create('/test.txt')
-    afs.write(fd, b'Version 1\n')
-    await afs.close(fd)
-    print('Created file')
-
-asyncio.run(test())
-"
-
-# Terminal 3: Second client - uses cached copy
-python -c "
-import asyncio
-from rpc.client import RPCClient
-from afs.client import AFSClient
-
-async def test():
-    afs = AFSClient(RPCClient(['127.0.0.1:8888']))
-    
-    # First open - fetches from server
-    fd = await afs.open('/test.txt', 'r')
-    print('First:', afs.read(fd))
-    await afs.close(fd)
-    
-    # Second open - uses cache (TestAuth returns valid)
-    fd = await afs.open('/test.txt', 'r')
-    print('Second (cached):', afs.read(fd))
-    await afs.close(fd)
-
-asyncio.run(test())
-"
-```
-
-### Fault Tolerance Testing
+## Fault Tolerance Testing
 
 **Test 1: Server Crash**
 ```bash
