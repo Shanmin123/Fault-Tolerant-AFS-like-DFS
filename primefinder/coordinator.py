@@ -2,6 +2,8 @@ import socket
 import pickle
 import math
 import send_data, recv_data
+import time
+import threading
 
 
 HOST = 'localhost'
@@ -37,7 +39,7 @@ def coordinator_main():
     for i, chunk in enumerate(chunks):
         task.append({'id':i, 'data':chunk, 'status': 'pending', 'used_worker':None})
 
-    # def_heartbeat_tracker
+    # def_heartbeat_tracker,tine set as 10s
     def heartbeat_tracker():
         while True:
             time.sleep(1)
@@ -87,4 +89,5 @@ def coordinator_main():
 if __name__ == "__main__":
 
     coordinator_main()
+
 
