@@ -19,18 +19,21 @@ class RaftRPC:
         timeout=0.5
       )
       request = {
-        "type": "VoteRequest",
-        "term": term,
-        "candidate_id": candidate_id,
-        "last_log_id": last_log_id,
-        "last_log_term": last_log_term
+        "op": "VoteRequest",
+        "req_od": "raft-vote",
+        "args":{
+          "term": term,
+          "candidate_id": candidate_id,
+          "last_log_id": last_log_id,
+          "last_log_term": last_log_term
+        }
       }
       await asyncio.wait_for(write_frame(writer, request), timeout=0.5)
       response = await asyncio.wait_for(read_frame(reader), timeout=0.5)
       writer.close()
       await writer.wait_closed()
-
-      return response
+      if isinstance(response, dict) and response.get("code") == 0:
+        return response.get("data")
     except Exception as e:
       return None
   
@@ -43,19 +46,23 @@ class RaftRPC:
         timeout=0.5
       )
       request = {
-        "type": "AppendEntries",
-        "term": term,
-        "leader_id": leader_id,
-        "leader_commit": leader_commit,
-        "prev_log_id": prev_log_id,
-        "prev_log_term": prev_log_term
+        "op": "AppendEntries",
+        "req_id": "raft-append",
+        "args":{
+          "term": term,
+          "leader_id": leader_id,
+          "leader_commit": leader_commit,
+          "prev_log_id": prev_log_id,
+          "prev_log_term": prev_log_term,
+          "entries": entries
+        }
       }
       await asyncio.wait_for(write_frame(writer, request), timeout=0.5)
       response = await asyncio.wait_for(read_frame(reader), timeout=0.5)
       writer.close()
       await writer.wait_closed()
-
-      return response
+      if isinstance(response, dict) and response.get("code") == 0:
+        return response.get("data")
     except Exception as e:
       return None
     
@@ -77,7 +84,7 @@ class RaftRPC:
     """send empty AppendEntries to all peers"""
     tasks = []
     for peer in peers:
-      task = self.send_append_entries(peer, term, leader_commit, leader_id, prev_log_id, prev_log_term, entries=[])
+      task = self.send_append_entries(peer_ad=peer, term=term, leader_id=leader_id, leader_commit=leader_commit, prev_log_id=prev_log_id, prev_log_term=prev_log_term, entries=[])
       tasks.append(task)
     await asyncio.gather(*tasks, return_exceptions=True)
   
@@ -92,7 +99,7 @@ class RaftRPC:
       entries = [e.to_dict() for e in node.log[next_id - 1:]]
     
     response = await self.send_append_entries(
-      peer_ad, node.current_term, node.node_id, prev_log_id, prev_log_term, entries, node.commit_id
+      peer_ad, node.current_term, node.node_id, node.commit_id, prev_log_id, prev_log_term, entries
     )
     if response is None:
       return False

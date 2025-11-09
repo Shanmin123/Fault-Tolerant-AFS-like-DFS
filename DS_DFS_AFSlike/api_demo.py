@@ -10,8 +10,8 @@ async def main():
     afs = AFSClient(rpc)
     
     #Example: Create and write a new file
-    print("Creating new file /test.txt")
-    fd1 = await afs.create("/test.txt")
+    print("Creating new file /test_d.txt")
+    fd1 = await afs.create("/test_d.txt")
     print(f"File descriptor: {fd1}")
     
     print("Writing data to file")
@@ -24,8 +24,8 @@ async def main():
     print("File closed and flushed\n")
     
     #Example: Open file and read
-    print("Opening /test.txt for reading")
-    fd2 = await afs.open("/test.txt", mode='r')
+    print("Opening /test_d.txt for reading")
+    fd2 = await afs.open("/test_d.txt", mode='r')
     print(f"File descriptor: {fd2}")
     
     print("Reading file content")

@@ -51,11 +51,22 @@ class RaftServer:
     self.rpc_server.register("Create", self.handle_create)
     self.rpc_server.register("PutFile", self.handle_put_file)
 
-  async def handle_request_vote(self, term: int, candidate_id: str, last_log_id: int, last_log_term: int) -> dict:
+  async def handle_request_vote(self, **kwargs) -> dict:
+    term = kwargs.get("term")
+    candidate_id = kwargs.get("candidate_id")
+    last_log_id = kwargs.get("last_log_id")
+    last_log_term = kwargs.get("last_log_term")
     vote, current_term = self.raft.vote(term, candidate_id, last_log_id, last_log_term)
     return {"is_vote": vote, "term": current_term}
 
-  async def handle_append_entries(self, term: int, leader_id: str, prev_log_id: int, prev_log_term: int, entries: list, leader_commit: int) -> dict:
+  async def handle_append_entries(self, **kwargs) -> dict:
+    term = kwargs.get("term")
+    leader_id = kwargs.get("leader_id")
+    prev_log_id = kwargs.get("prev_log_id")
+    prev_log_term = kwargs.get("prev_log_term")
+    entries = kwargs.get("entries", [])
+    leader_commit = kwargs.get("leader_commit")
+        
     #track the leader for _get_last_leader()
     if term >= self.raft.current_term:
       self.last_leader = leader_id
@@ -174,7 +185,7 @@ class RaftServer:
     self.election_task = asyncio.create_task(self._election_loop())
     self.heartbeat_task = asyncio.create_task(self._heartbeat_loop())
     print(f"[RaftAFS-{self.node_id}] Starting server on {self.host}:{self.port}")
-    print(f"[RaftAFS-{self.node_id}] Peers: {self.raft.peers}")
+    print(f"[RaftAFS-{self.node_id}] Peers: {self.raft.peer_adr}")
     #start RPC server
     await self.rpc_server.serve(self.host, self.port)
 

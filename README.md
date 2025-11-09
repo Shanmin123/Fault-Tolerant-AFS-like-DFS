@@ -188,7 +188,7 @@ python test_connect_cluster.py
 python test_basic_operations.py --raft
 
 # Full Raft test suite
-python test_raft_cluster.py
+python test_raft.py
 ```
 
 ### Fault Tolerance Testing
@@ -210,7 +210,7 @@ python api_demo.py
 # Client with short timeout
 python -c "
 import asyncio
-from rpc.client_rpc import RPCClient
+from rpc.client import RPCClient
 
 async def test():
     rpc = RPCClient(['127.0.0.1:9999'], read_timeout=0.5, retries=2)
