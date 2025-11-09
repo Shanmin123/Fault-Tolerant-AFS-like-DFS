@@ -18,4 +18,7 @@ text1000.txt里是用numbers_generators随机生成的1000个数,如果正确运
 ack机制（coordinator发一次ok，worker收到后关闭）是ai建议我加的，但是好像对功能没有什么提升
 
 
+
 崩溃模拟是再worker代码段里，在75行处可以设置崩溃概率，断掉后要手动重启
+
+任务跟踪+心跳检测基本完成，与snapshots的coordinator—worker版本对接一下就行，之后再实践测试运行存在的问题
