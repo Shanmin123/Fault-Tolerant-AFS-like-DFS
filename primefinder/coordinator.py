@@ -72,22 +72,42 @@ def coordinator_main():
             task['used_worker'] = wid
             print(f'Worker {wid} do {task['id']}')
 
-    ###Update latter 11.8  main loop_receive task and heart
+    ###receive task and heartbeat
     completed=0
+    last_check=time.time()
     while completed<len(task):
-        
-   
-
-    
-    #write results
+        for wid, info in workers.items():
+            conn, addr = info['conn'], info['addr']
+            try:
+                conn.settimeout(1)
+                msg = recv_data(conn)
+                if msg['type'] == 'heartbeat':
+                    info['last_heartbeat'] = time.time()
+                elif msg['type'] == 'result':
+                    task_id=msg['task_id']
+                    result=msg['data']
+                    primes.update(result)
+                    task[task_id]['status']='done'
+                    task[task_id]['used_worker'] = None
+                    completed= sum(1 for t in tasks if t['status'] == 'done' )
+                    print(f'[result] {task_id} done by {wid}, completed {completed}/{len(task)}')
+            except socket.timeout:
+                continue
+            except Exception as e:
+                print(e)
+    # write result
     with open("outputs/primes_distributed.txt", "w") as f:
         for p in sorted(primes):
             f.write(f"{p}\n")
 
     print("finished")
+    server.close()
+        
+   
 
 if __name__ == "__main__":
 
     coordinator_main()
+
 
 
