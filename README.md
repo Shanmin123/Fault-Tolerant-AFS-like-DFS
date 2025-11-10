@@ -10,6 +10,7 @@ This is a distributed systems project composed of two main parts:
 - [Integration](#integration)
 - [File System](#afs-like-distributed-file-system-with-raft-consensus)
 - [Prime Finder](#distributed-prime-finder)
+- [Test Suite](#test-suite)
 
 ---
 
@@ -152,4 +153,74 @@ primefinder/
 ├── readsnapshot.py         # Utility to read local snapshots
 ├── snapshot.py             # Original snapshot logic (threading-based)
 └── worker.py               # Original worker (threading-based)
+```
+
+---
+
+## Test Suite
+
+These tests are located in the AFS/ directory and are used to verify the file system's functionality independent of the Prime Finder.
+
+`test_basic_operations.py`
+
+Purpose: Verifies core file operations (create, write, read, close). It writes data, flushes it (on close), then re-opens and reads the data to ensure it matches.
+
+How to Run:
+
+```bash
+# Against a single server (requires run_afs_server.py)
+python -m AFS.test_basic_operations
+
+# Against a full Raft cluster
+python -m AFS.test_basic_operations --raft
+```
+
+`test_cache_validation.py`
+
+Purpose: Tests the client-side whole-file caching. It demonstrates:
+
+First open fetches from the server (Cache Miss).
+
+Second open uses the local cache (Cache Hit).
+
+A server-side modification invalidates the cache.
+
+Third open re-fetches the new version (Cache Invalidation).
+
+How to Run: (Requires run_afs_server.py)
+
+```bash
+python -m AFS.test_cache_validation
+```
+
+`test_afs_idempotency_client.py`
+
+Purpose: Verifies that the server correctly handles idempotency keys (op_id). It sends the same Create command twice with the same op_id.
+
+Expected Result: The first call executes, and the second call returns the exact same result without creating a second file or throwing an error.
+
+How to Run: (Requires run_afs_server.py)
+
+```bash
+python -m AFS.test_afs_idempotency_client
+```
+
+`test_connect_cluster.py`
+
+Purpose: A simple "smoke test" for the Raft cluster. It connects to all three servers, relies on the RPCClient to find the leader, and performs a single create/write/read cycle.
+
+How to Run: (Requires the 3-node Raft cluster to be running)
+
+```bash
+python -m AFS.test_connect_cluster
+```
+
+`test_raft.py`
+
+Purpose: A more comprehensive test suite for the Raft cluster. It checks cluster status, basic operations, read/write behavior on followers (writes should be rejected), and provides a prompt for manual leader failure testing.
+
+How to Run: (Requires the 3-node Raft cluster to be running)
+
+```bash
+python -m AFS.test_raft
 ```
