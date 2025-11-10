@@ -24,7 +24,7 @@ You have two options for running the file system:
 Option 1: Single Server
 ```bash
 # Terminal 1
-python -m DS_DFS_AFSlike.run_afs_server
+python -m AFS.run_afs_server
 ```
 
 Option 2: Raft Cluster
@@ -43,7 +43,7 @@ python -m AFS.raft.server server3 127.0.0.1 8890 127.0.0.1:8888 127.0.0.1:8889
 
 ```bash
 # Generate test data (if not exists)
-python -m primefinder2_snapshot.numers_generator
+python -m primefinder.numers_generator
 
 # Upload to AFS
 python -m integration.data_to_afs
