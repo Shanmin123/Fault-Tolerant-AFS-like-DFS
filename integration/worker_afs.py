@@ -17,7 +17,7 @@ class AFSWorker:
     self.worker_id = worker_id
     self.afs_servers = afs_servers
     self.afs: AFSClient = None
-    self.path = f"cache/primefinder2_snapshot/snapshots/worker_{worker_id}.pkl"
+    self.path = f"primefinder2_snapshot/snapshots/worker_{worker_id}.pkl"
   async def initialize_afs(self):
     rpc = RPCClient(self.afs_servers, retries=2)
     self.afs = AFSClient(rpc)

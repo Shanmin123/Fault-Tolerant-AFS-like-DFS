@@ -40,7 +40,7 @@ class AFSCoordinator:
       raise
   async def save_sp_afs(self, snapshot: str, data: dict):
     """save coordinator snapshots to AFS"""
-    path = f"cache/primefinder2_snapshot/snapshots/{snapshot}.pkl"
+    path = f"primefinder2_snapshot/snapshots/{snapshot}.pkl"
     try:
       bytes = pickle.dumps(data)
       try:
@@ -55,7 +55,7 @@ class AFSCoordinator:
       print(f"Error saving snapshot: {e}")
   async def load_sp_afs(self, snapshot: str):
     """Load snapshot from AFS"""
-    path = f"cache/primefinder2_snapshot/snapshots/{snapshot}.pkl"
+    path = f"primefinder2_snapshot/snapshots/{snapshot}.pkl"
     try:
       fd = await self.afs.open(path, mode="r")
       content = self.afs.read(fd)
