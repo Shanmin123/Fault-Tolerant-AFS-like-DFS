@@ -57,7 +57,7 @@ class RPCServer:
     def __init__(self) -> None:
         # Registry mapping 'op' (str) -> async handler
         self._handlers: Dict[str, Handler] = {}
-        self._db_path = "oplog.db"          # persistent idempotency store (SQLite)
+        self._db_path = "./srv_data/oplog.db"          # persistent idempotency store (SQLite)
         self._db = None                     # will be set in _init_storage()
         # self._oplog remains as a fast in-memory cache; DB is the source of truth
         self._oplog: Dict[str, dict] = {}   # business idempotency: op_id -> last successful data
