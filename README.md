@@ -1,10 +1,99 @@
 # DS-2025-Group-coursework1
 
+## Integration
+This guide explains how to integrate the distributed prime number finder (Part 2) with the AFS distributed file system (Part 1).
+
+### Structure
+```
+integration/
+├── coordinator_afs.py
+├── data_to_afs.py
+└── worker_afs.py
+```
+
+| File | Purpose | Key Changes |
+|------|---------|-------------|
+| `coordinator_afs.py` | AFS-integrated coordinator | Uses AFSClient for all I/O |
+| `worker_afs.py` | AFS-integrated worker | Snapshots stored in AFS |
+| `upload_data_to_afs.py` | Data upload utility | Populates AFS with test data |
+| `check_results_afs.py` | Results viewer | Reads results from AFS |
+
+### Setup
+
+**Step 1: Start AFS Cluster**
+
+```bash
+# Terminal 1
+python -m DS_DFS_AFSlike.run_afs_server
+```
+
+
+**Step 2: Generate and Upload Test Data**
+
+```bash
+# Generate test data (if not exists)
+python -m primefinder2_snapshot.numers_generator
+
+# Upload to AFS
+python -m integration.data_to_afs
+```
+
+**Step 3: Start Coordinator**
+
+```bash
+# Terminal 4 (or Terminal 2 if using single server)
+python -m integration.coordinator_afs
+```
+
+**Step 4: Start Workers**
+
+```bash
+# Terminal 5
+python -m integration.worker_afs 1
+
+# Terminal 6
+python -m integration.worker_afs 2
+
+# Terminal 7
+python -m integration.worker_afs 3
+
+# Terminal 8
+python -m integration.worker_afs 4
+```
+
+**Step 5: Simulate Failure (Optional)**
+
+**Kill a worker mid-execution:**
+```bash
+# In Terminal 6 (Worker 2), press Ctrl+C
+^C
+[Worker 2] ⚠️  SIMULATED CRASH at number 12345 (index 67)
+[Worker 2] Restart with: python worker_afs.py 2
+```
+
+**Restart the worker:**
+```bash
+# Terminal 6
+python -m integration.worker_afs 2
+```
+
+**Expected recovery:**
+```
+[Worker 2] Starting...
+[Worker 2] Connected to AFS cluster
+[Worker 2] Loaded snapshot from AFS
+[Worker 2] Resuming from AFS snapshot: 67/250 processed
+[Worker 2] Processing from index 67...
+[Worker 2] Progress: 70/250
+...
+```
+
+------
+
 ## AFS-Like Distributed File System with Raft Consensus
 
 A fault-tolerant, replicated distributed file system inspired by the Andrew File System (AFS), implemented in Python using asyncio with Raft consensus for high availability.
 
----
 
 ## Table of Contents
 
@@ -19,8 +108,6 @@ A fault-tolerant, replicated distributed file system inspired by the Andrew File
 - [Fault Tolerance](#fault-tolerance)
 - [Raft Configuration](#raft-consensus)
 
----
-
 ## Overview
 
 This project implements a distributed file system with the following components:
@@ -30,7 +117,6 @@ This project implements a distributed file system with the following components:
 3. **Fault Tolerance**: Comprehensive error handling, timeouts, retries, and idempotency
 4. **Raft Consensus**: Leader election and log replication for high availability
 
----
 
 ## Key Features
 
@@ -56,7 +142,6 @@ This project implements a distributed file system with the following components:
 - **Crash recovery**: Persistent Raft state survives restarts
 - **Split-brain prevention**: Majority quorum required for all operations
 
----
 
 ## Project structure
 ```
@@ -66,8 +151,6 @@ DFS/
 │   ├── client.py                   # AFS client with POSIX API + caching
 │   └── handlers.py                 # Server handlers
 ├── cache/                          # Client-side cache
-│   ├── .meta.json                  # Version tracking
-│   └── demo.txt                    # Cached files
 ├── raft/                           # Raft consensus
 │   ├── __init__.py
 │   ├── rpc.py                      # Raft RPC communication
@@ -93,7 +176,6 @@ DFS/
 └── test_raft.py
 ```
 
----
 
 ## Setup
 
@@ -117,7 +199,6 @@ mkdir -p cache
 echo "Initial file content" > srv_data/demo.txt
 ```
 
----
 
 ## Usage
 
@@ -139,28 +220,28 @@ echo "Initial file content" > srv_data/demo.txt
 #### Setup
 ```bash
 # Default (127.0.0.1:8888)
-python run_afs_server.py
+python -m DS_DFS_AFSlike.run_afs_server.py
 
 # Custom host/port
-python run_afs_server.py 0.0.0.0 9999
+python -m DS_DFS_AFSlike.run_afs_server.py 0.0.0.0 9999
 ```
 
 #### Run Tests
 ```bash
 # Basic operations
-python test_basic_operations.py
+python -m DS_DFS_AFSlike.test_basic_operations.py
 
 # Cache validation
-python test_cache_validation.py
+python -m DS_DFS_AFSlike.test_cache_validation.py
 
 # Low-level RPC test
-python afs_smoke.py
+python -m DS_DFS_AFSlike.afs_smoke.py
 
 # High-level API test
-python afs_client_demo.py
+python -m DS_DFS_AFSlike.afs_client_demo.py
 
 # POSIX-like API test
-python api_demo.py
+python -m DS_DFS_AFSlike.api_demo.py
 ```
 
 ### Raft Cluster Testing
@@ -168,13 +249,13 @@ python api_demo.py
 #### Setup (3 Terminals)
 ```bash
 # Terminal 1: Server 1
-python -m raft.server server1 127.0.0.1 8888 127.0.0.1:8889 127.0.0.1:8890
+python -m DS_DFS_AFSlike.raft.server server1 127.0.0.1 8888 127.0.0.1:8889 127.0.0.1:8890
 
 # Terminal 2: Server 2
-python -m raft.server server2 127.0.0.1 8889 127.0.0.1:8888 127.0.0.1:8890
+python -m DS_DFS_AFSlike.raft.server server2 127.0.0.1 8889 127.0.0.1:8888 127.0.0.1:8890
 
 # Terminal 3: Server 3
-python -m raft.server server3 127.0.0.1 8890 127.0.0.1:8888 127.0.0.1:8889
+python -m DS_DFS_AFSlike.raft.server server3 127.0.0.1 8890 127.0.0.1:8888 127.0.0.1:8889
 ```
 
 **Wait for Leader Election:** `[Raft-serverX] Became leader for term N`
@@ -182,13 +263,13 @@ python -m raft.server server3 127.0.0.1 8890 127.0.0.1:8888 127.0.0.1:8889
 #### Run Tests (Terminal 4)
 ```bash
 # Simple connection test
-python test_connect_cluster.py
+python -m DS_DFS_AFSlike.test_connect_cluster.py
 
 # Basic operations through Raft
-python test_basic_operations.py --raft
+python -m DS_DFS_AFSlike.test_basic_operations.py --raft
 
 # Full Raft test suite
-python test_raft.py
+python -m DS_DFS_AFSlike.test_raft.py
 ```
 
 ### Fault Tolerance Testing
@@ -196,10 +277,10 @@ python test_raft.py
 **Test 1: Server Crash**
 ```bash
 # Start server
-python run_afs_server.py
+python -m DS_DFS_AFSlike.run_afs_server.py
 
 # In another terminal, run client
-python api_demo.py
+python -m DS_DFS_AFSlike.api_demo.py
 
 # Kill server (Ctrl+C)
 # Client should get error: {"code": 1002, "err": "CONNECTION_REFUSED"}
@@ -210,7 +291,7 @@ python api_demo.py
 # Client with short timeout
 python -c "
 import asyncio
-from rpc.client import RPCClient
+from DS_DFS_AFSlike.rpc.client import RPCClient
 
 async def test():
     rpc = RPCClient(['127.0.0.1:9999'], read_timeout=0.5, retries=2)
@@ -224,7 +305,7 @@ asyncio.run(test())
 
 **Test 3: Idempotency**
 ```bash
-python test_afs_idempotency_client.py
+python -m DS_DFS_AFSlike.test_afs_idempotency_client.py
 # Should show same result for repeated calls with same op_id
 ```
 
@@ -256,7 +337,6 @@ python test_afs_idempotency_client.py
 # 5. Files are consistent across all servers
 ```
 
----
 
 ## Fault Tolerance
 
@@ -297,7 +377,6 @@ RPCClient(
 | 1004 | E_READ_FAILED | Receive failed | Retry |
 | 1999 | E_INTERNAL | Server error | Report to user |
 
----
 
 ## Raft Consensus
 
