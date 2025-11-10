@@ -1,6 +1,6 @@
 """Raft consensus implementation for AFS replication"""
-from raft.state import RaftNode, Node, LogEntry
-from raft.server import RaftServer
-from raft.rpc import RaftRPC
+from AFS.raft.state import RaftNode, Node, LogEntry
+from AFS.raft.server import RaftServer
+from AFS.raft.rpc import RaftRPC
 
 __all__ = ['RaftNode', 'Node', 'LogEntry', 'RaftEPC', 'RaftServer']
