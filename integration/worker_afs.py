@@ -5,9 +5,9 @@ import pickle
 import sys
 import random
 import asyncio
-from primefinder2_snapshot.prime import is_prime
-from DS_DFS_AFSlike.afs.client import AFSClient
-from DS_DFS_AFSlike.rpc.client import RPCClient
+from primefinder.prime import is_prime
+from AFS.afs.client import AFSClient
+from AFS.rpc.client import RPCClient
 
 HOST = 'localhost'
 PORT = 5000

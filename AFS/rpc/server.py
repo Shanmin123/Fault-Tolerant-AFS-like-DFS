@@ -23,7 +23,7 @@ import asyncio
 import uuid
 import time
 from typing import Dict, Callable, Awaitable
-from DS_DFS_AFSlike.rpc.framing import read_frame, write_frame
+from AFS.rpc.framing import read_frame, write_frame
 import json
 import aiosqlite
 

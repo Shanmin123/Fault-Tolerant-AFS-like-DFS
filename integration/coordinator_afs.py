@@ -5,8 +5,8 @@ import pickle
 import math
 import asyncio
 from typing import Set, List, Dict
-from DS_DFS_AFSlike.rpc.client import RPCClient
-from DS_DFS_AFSlike.afs.client import AFSClient
+from AFS.rpc.client import RPCClient
+from AFS.afs.client import AFSClient
 
 HOST = 'localhost'
 PORT = 5000

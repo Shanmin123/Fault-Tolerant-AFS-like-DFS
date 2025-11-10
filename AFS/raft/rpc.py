@@ -3,7 +3,7 @@ Raft RPC communication layer.
 Implements Vote and Append RPCs for Raft consensus.
 """
 import asyncio
-from DS_DFS_AFSlike.rpc.framing import write_frame, read_frame
+from AFS.rpc.framing import write_frame, read_frame
 from typing import List, Optional
 
 class RaftRPC:

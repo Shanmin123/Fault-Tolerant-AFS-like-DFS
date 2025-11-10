@@ -13,8 +13,8 @@ Usage:
 """
 
 import asyncio
-from DS_DFS_AFSlike.rpc.client import RPCClient
-from DS_DFS_AFSlike.afs.client import AFSClient
+from AFS.rpc.client import RPCClient
+from AFS.afs.client import AFSClient
 async def main():
     print("=" * 60)
     print("TEST: Connect to Raft Cluster")

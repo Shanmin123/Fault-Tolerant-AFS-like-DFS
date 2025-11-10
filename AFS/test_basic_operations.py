@@ -9,8 +9,8 @@ Usage:
 
 import asyncio
 import sys
-from DS_DFS_AFSlike.rpc.client import RPCClient
-from DS_DFS_AFSlike.afs.client import AFSClient
+from AFS.rpc.client import RPCClient
+from AFS.afs.client import AFSClient
 
 async def test_basic_operations(use_raft=False):
     """Test basic file operations"""

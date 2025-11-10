@@ -3,8 +3,8 @@ run before start coor and worker
 """
 import asyncio
 import os
-from DS_DFS_AFSlike.afs.client import AFSClient
-from DS_DFS_AFSlike.rpc.client import RPCClient
+from AFS.afs.client import AFSClient
+from AFS.rpc.client import RPCClient
 
 async def upload_test(input_file="primefinder2_snapshot/data/test1000.txt", path="primefinder2_snapshot/data/test1000.txt"):
   print("UPLOAD TEST DATA TO AFS")
