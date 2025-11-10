@@ -1,8 +1,8 @@
 # afs_client_demo.py
 import asyncio
 from pathlib import Path
-from rpc.client import RPCClient
-from afs.client import AFSClient
+from DS_DFS_AFSlike.rpc.client import RPCClient
+from DS_DFS_AFSlike.afs.client import AFSClient
 
 async def main():
     rpc = RPCClient(["127.0.0.1:8888"])

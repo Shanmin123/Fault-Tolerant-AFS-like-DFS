@@ -1,6 +1,6 @@
 # afs_smoke.py
 import asyncio, base64
-from rpc.client import RPCClient
+from DS_DFS_AFSlike.rpc.client import RPCClient
 
 async def main():
     c = RPCClient(["127.0.0.1:8888"])
