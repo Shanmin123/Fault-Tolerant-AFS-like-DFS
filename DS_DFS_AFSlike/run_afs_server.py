@@ -1,7 +1,7 @@
 # run_afs_server.py
 import asyncio
-from rpc.server import RPCServer
-from afs.handlers import Open, TestAuth, GetFile, PutFile, Create
+from DS_DFS_AFSlike.rpc.server import RPCServer
+from DS_DFS_AFSlike.afs.handlers import Open, TestAuth, GetFile, PutFile, Create
 import sys
 
 async def main():

@@ -8,8 +8,8 @@ Tests:
 """
 import asyncio
 import time
-from afs.client import AFSClient
-from rpc.client import RPCClient
+from DS_DFS_AFSlike.afs.client import AFSClient
+from DS_DFS_AFSlike.rpc.client import RPCClient
 
 async def test_basic():
   print("Test 1: Basic File Operations")
