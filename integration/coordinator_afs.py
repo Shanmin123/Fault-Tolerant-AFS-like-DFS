@@ -1,5 +1,5 @@
 """
-Coordinator for distributed prime number finding using AFS
+Coordinator using AFS with Chandy-Lamport snapshot
 """
 import pickle
 import math
@@ -7,25 +7,31 @@ import asyncio
 from typing import Set, List, Dict
 from AFS.rpc.client import RPCClient
 from AFS.afs.client import AFSClient
+import integration.snapshot_afs as snapshot
 
 HOST = 'localhost'
 PORT = 5000
 NUM_WORKERS = 4
-SNAPSHOT = "coordinator_snapshot"
+SNAPSHOT_NAME = "coordinator_global_snapshot"
+#afs path
+INPUT_FILE = "/primefinder/data/test1000.txt"
+OUTPUT_FILE = "/primefinder/outputs/primes_distributed.txt"
 
 class AFSCoordinator:
-  #coordinator now uses AFS
   def __init__(self, afs_servers):
     self.afs_servers = afs_servers
     self.afs: AFSClient = None
-
-    self.rest_queue: asyncio.Queue = None
     self.primes: Set[int] = set()
-    self.done_chunks: List[int] = []
-    self.active_chunks: Dict[int, List[int]] = {}
+    #{worker_id: writer}
+    self.workers: Dict[int, asyncio.StreamWriter] = {}
+    self.finished_workers: Set[int] = set()
+    self.tasks: List[List[int]] = []
+    self.next_worker_id = 1
+
   async def initialize_afs(self):
     rpc = RPCClient(self.afs_servers, retries=2)
     self.afs = AFSClient(rpc=rpc)
+
   async def read_from_afs(self, path: str):
     try:
       fd = await self.afs.open(path, mode="r")
@@ -38,36 +44,9 @@ class AFSCoordinator:
     except Exception as e:
       print(f"Error reading from AFS: {e}")
       raise
-  async def save_sp_afs(self, snapshot: str, data: dict):
+
+  async def save_sp_afs(self, path: str, primes: set):
     """save coordinator snapshots to AFS"""
-    path = f"primefinder2_snapshot/snapshots/{snapshot}.pkl"
-    try:
-      bytes = pickle.dumps(data)
-      try:
-        fd = await self.afs.create(path)
-      except:
-        #file exists
-        fd = await self.afs.open(path, mode="w")
-      self.afs.write(fd, bytes)
-      await self.afs.close(fd)
-      print(f"Coordinator snapshots saved to AFS: {path}")
-    except Exception as e:
-      print(f"Error saving snapshot: {e}")
-  async def load_sp_afs(self, snapshot: str):
-    """Load snapshot from AFS"""
-    path = f"primefinder2_snapshot/snapshots/{snapshot}.pkl"
-    try:
-      fd = await self.afs.open(path, mode="r")
-      content = self.afs.read(fd)
-      await self.afs.close(fd)
-      data = pickle.loads(content)
-      print(f"Coordinator loads snapshot form AFS: {path}")
-      return data
-    except Exception as e:
-      print(f"Cannot find snapshot: {e}")
-      return None
-  async def save_to_afs(self, path: str, primes: set):
-    """save final primes results to AFS"""
     try:
       result = "\n".join(str(p) for p in sorted(primes))+"\n"
       try:
@@ -79,137 +58,124 @@ class AFSCoordinator:
       print(f"Coordinator save results: {len(primes)}")
     except Exception as e:
       print(f"Error saving primes: {e}")
+
+  def split_numbers(self, numbers, workers):
+    chunk_size = math.ceil(len(numbers)/workers)
+    chunks = []
+    i = 0
+    while i < len(numbers):
+        chunk = numbers[i:i + chunk_size]
+        chunks.append(chunk)
+        i += chunk_size
+    return chunks
   
-  @staticmethod
-  def split_numbers(numbers, workers):
-    size = math.ceil(len(numbers)/workers)
-    return [numbers[i:i+size] for i in range(0, len(numbers),size)]
+  async def snapshot_loop(self):
+    #gloabl snapshot perodic
+    while True:
+      await asyncio.sleep(1)
+      sid = snapshot.start(len(self.primes))
+      if sid:
+        print(f"Coordinator starting snapshot {sid}")
+        #send marker
+        marker = pickle.dumps({"type": "marker", "snapshot_id": sid})
+        for worker_id, writer in self.workers.items():
+          try:
+            writer.write(marker)
+            await writer.drain()
+          except ConnectionError:
+            print(f"Error sending marker to worker {worker_id} (disconnected)")
   
-  async def _get_snapshot_data(self):
-    """Helper to get current state for snapshotting"""
-    remaining_chunks = []
-    while not self.rest_queue.empty():
-      remaining_chunks.append(self.rest_queue.get_nowait())
-    all_rest = remaining_chunks + list(self.active_chunks.values())
-    for chunk in all_rest:
-      await self.rest_queue.put(chunk)
-    return {
-      "rest": all_rest,
-      "done": self.done_chunks,
-      "primes": list(self.primes)
-    }
   async def handle_worker(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     ad = writer.get_extra_info('peername')
-    chunk = None
-    chunk_id = None
-    try:
-      chunk = await self.rest_queue.get()
-      chunk_id = hash(tuple(chunk))
-      self.active_chunks[chunk_id] = chunk
-      task = {
-        "type": "task",
-        "chunk_id": chunk_id,
-        "data": chunk
-      }
-      print(f"Assigning chunk {chunk_id} to {ad}")
-      await self.save_sp_afs(SNAPSHOT, await self._get_snapshot_data())
-      writer.write(pickle.dumps(task))
-      await writer.drain()
-      data = await asyncio.wait_for(reader.read(8192), timeout=60.0)
-      if not data:
-        raise ConnectionError("Worker disconnected before sending result")
-      result = pickle.loads(data)
-
-      self.primes.update(result["primes"])
-      self.done_chunks.append(result["chunk_id"])
-      del self.active_chunks[chunk_id]
-      print(f"Receive result for chunk {chunk_id}: {len(result['primes'])} primes")
-
-      writer.write(b"ok")
-      await writer.drain()
-
-      await self.save_sp_afs(SNAPSHOT, await self._get_snapshot_data())
-      self.rest_queue.task_done()
-    except (asyncio.TimeoutError, ConnectionError, EOFError, ConnectionResetError) as e:
-      print(f"Worker {ad} failed on chunk {chunk_id}: {e}")
-      if chunk:
-        await self.rest_queue.put(chunk)
-        print(f"Re-queued chunk {chunk_id}")
-      if chunk_id in self.active_chunks:
-        del self.active_chunks[chunk_id]
-    except Exception as e:
-      print(f"Unhandled error for worker {ad}: {e}")
-      if chunk:
-        await self.rest_queue.put(chunk)
-      if chunk_id in self.active_chunks:
-        del self.active_chunks[chunk_id]
-    finally:
-      print(f"Worker {ad} disconnected")
-      writer.close()
-      await writer.wait_closed()
-  async def shutdown_when_done(self, server: asyncio.Server):
-    await self.rest_queue.join()
-    print("All tasks from queue have been processed.")
-    server.close()
-
-  async def run(self, input = "/primefinder2_snapshot/data/test1000.txt", output = "/outputs/primes_distributed.txt"):
-    """main logic with AFS"""
-    await self.initialize_afs()
-    self.rest_queue = asyncio.Queue()
-    self.primes = set()
-    self.done_chunks = []
-    self.active_chunks = {}
-    snapshot = await self.load_sp_afs(snapshot=SNAPSHOT)
-    if snapshot is None:
-      #read from AFS
-      numbers = await self.read_from_afs(input)
-      rest = self.split_numbers(numbers, NUM_WORKERS)
-      print(f"Starting with {len(rest)} chunks")
-    else:
-      #restore
-      rest = snapshot.get('rest', [])
-      self.done_chunks = snapshot.get('done', [])
-      self.primes = set(snapshot.get('primes', []))
-      print(f"Restored: {len(rest)} chunks remain, {len(self.done_chunks)} chunks done, {len(self.primes)} primes found")
+    print(f"Worker connected from {ad}")
+    if not self.tasks:
+        print("No tasks left for new worker")
+        writer.close()
+        await writer.wait_closed()
+        return
+    worker_id = self.next_worker_id
+    self.next_worker_id += 1
+    self.workers[worker_id] = writer
+    task_chunk = self.tasks.pop(0)
     
-    for chunk in rest:
-      await self.rest_queue.put(chunk)
-    #start server
-    server = await asyncio.start_server(self.handle_worker, HOST, PORT)
-    ad = server.sockets[0].getsockname()
-    print(f"Coordinator listening on {ad[0]}:{ad[1]}")
-
-    shutdown_task = asyncio.create_task(self.shutdown_when_done(server))
-
+    task = pickle.dumps({"type":"task", "chunk":task_chunk, "workerid": worker_id})
     try:
-      await server.serve_forever()
-    except asyncio.CancelledError:
-      print("Server is shutting down.")
-    await shutdown_task
-    print(f"All tasks completed")
-    print(f"Total primes: {len(self.primes)}")
+      writer.write(task)
+      await writer.drain()
+      while True:
+        data = await reader.read(4096)
+        if not data:
+          raise ConnectionError("Worker disconnected")
+        message = pickle.loads(data)
+        type = message.get("type")
 
-    await self.save_to_afs(output, self.primes)
+        if type == "result":
+          self.primes.add(message["prime"])
+          snapshot.save_inflight(worker_id, message["prime"])
+          
+        elif type == "marker":
+          await snapshot.save_snapshot(
+              self.afs,
+              SNAPSHOT_NAME,
+              message["workerid"],
+              message["snapshot_id"],
+              message["state"]
+          )
+          
+        elif type == "finish":
+          print(f"Worker {worker_id} finished")
+          self.finished_workers.add(worker_id)
+          break
 
+    except (ConnectionError, EOFError, ConnectionResetError) as e:
+      print(f"Worker {worker_id} (from {ad}) disconnected: {e}")
+    except Exception as e:
+      print(f"Error with worker {worker_id}: {e}")
+    finally:
+      if worker_id in self.workers:
+        del self.workers[worker_id]
+      if not writer.is_closing():
+        writer.close()
+        await writer.wait_closed()
+
+  async def run(self):
+    await self.initialize_afs()
+    numbers = await self.read_from_afs(INPUT_FILE)
+    self.tasks = self.split_numbers(numbers, NUM_WORKERS)
+    snapshot_task = asyncio.create_task(self.snapshot_loop())
+
+    server = await asyncio.start_server(self.handle_worker, HOST, PORT)
+    addr = server.sockets[0].getsockname()
+    print(f"Coordinator listening on {addr[0]}:{addr[1]}, waiting for {NUM_WORKERS} workers")
+
+    while len(self.finished_workers) < NUM_WORKERS:
+      await asyncio.sleep(1)
+      if not self.workers and not self.tasks and len(self.finished_workers) < NUM_WORKERS:
+          print("All workers disconnected before finishing.")
+          break
+    print("All workers finished.")
+
+    server.close()
+    await server.wait_closed()
+    snapshot_task.cancel()
+    print(f"Total primes found: {len(self.primes)}")
+    await self.save_to_afs(OUTPUT_FILE, self.primes)
 
 async def main():
   afs_servers = [
     "127.0.0.1:8888",
-    # Uncomment for Raft:
     #"127.0.0.1:8889",
     #"127.0.0.1:8890"
   ]
   coordinator = AFSCoordinator(afs_servers)
   try:
-    await coordinator.run(
-      input="/primefinder2_snapshot/data/test1000.txt",
-      output="/outputs/primes_distributed.txt"
-    )
+    await coordinator.run()
   except KeyboardInterrupt:
-    print("Keyboard interrupt")
+    print("\nKeyboard interrupted.")
   except Exception as e:
-    print(f"Error: {e}")
+    print(f"Coordinator error: {e}")
     raise
 
 if __name__ == "__main__":
   asyncio.run(main())
+

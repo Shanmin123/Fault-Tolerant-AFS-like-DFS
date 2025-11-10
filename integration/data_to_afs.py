@@ -6,6 +6,9 @@ import os
 from AFS.afs.client import AFSClient
 from AFS.rpc.client import RPCClient
 
+LOCAL_INPUT_FILE = "primefinder/data/test1000.txt"
+AFS_INPUT_PATH = "/primefinder/data/test1000.txt"
+
 async def upload_test(input_file="primefinder2_snapshot/data/test1000.txt", path="primefinder2_snapshot/data/test1000.txt"):
   print("UPLOAD TEST DATA TO AFS")
   print("=" * 60)
@@ -17,7 +20,6 @@ async def upload_test(input_file="primefinder2_snapshot/data/test1000.txt", path
   #connect
   servers = [
     "127.0.0.1:8888",
-    #Uncomment for Raft:
     #"127.0.0.1:8889",
     #"127.0.0.1:8890"
   ]
@@ -79,7 +81,7 @@ async def test_connect():
 
 async def main():
   if not await test_connect(): return
-  success = await upload_test()
+  success = await upload_test(LOCAL_INPUT_FILE, AFS_INPUT_PATH)
   if not success:
     print("Fail to upload test data")
     exit(1)
