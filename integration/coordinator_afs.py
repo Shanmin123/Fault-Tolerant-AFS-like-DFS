@@ -7,7 +7,7 @@ import asyncio
 from typing import Set, List, Dict
 from AFS.rpc.client import RPCClient
 from AFS.afs.client import AFSClient
-import integration.snapshot_afs as snapshot
+import primefinder.snapshot as snapshot
 
 HOST = 'localhost'
 PORT = 5000
