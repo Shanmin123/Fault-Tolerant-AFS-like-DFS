@@ -56,6 +56,7 @@ async def save_snapshot(afs_client: AFSClient, snapshot_name: str, workerid, sid
             }
 
             path = f"snapshots/{snapshot_name}_{snapshot_id}.pkl"
+            path_latest = f"snapshots/snapshot_latest.pkl"
             try:
                 bytes = pickle.dumps(data)
                 #to afs
@@ -66,6 +67,14 @@ async def save_snapshot(afs_client: AFSClient, snapshot_name: str, workerid, sid
                     fd = await afs_client.open(path, "w")
                 afs_client.write(fd, bytes)
                 await afs_client.close(fd)
+
+                try:
+                    fd_latest = await afs_client.create(path_latest)
+                except:
+                    fd_latest = await afs_client.open(path_latest, mode="w")
+                afs_client.write(fd_latest, bytes)
+                await afs_client.close(fd_latest)
+
                 print(f"[Snapshot] Snapshot {snapshot_id} saved to AFS at {path}")
             except Exception as e:
                 print(f"Fail to save{snapshot_id} to AFS: {e}")

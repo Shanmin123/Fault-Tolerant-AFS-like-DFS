@@ -22,15 +22,15 @@ class AFSCoordinator:
     self.afs_servers = afs_servers
     self.afs: AFSClient = None
     self.primes: Set[int] = set()
-    #{worker_id: writer}
     self.workers: Dict[int, asyncio.StreamWriter] = {}
     self.finished_workers: Set[int] = set()
-    self.tasks: List[List[int]] = []
+    self.chunks: List[List[int]] = []
     self.next_worker_id = 1
 
   async def initialize_afs(self):
     rpc = RPCClient(self.afs_servers, retries=2)
     self.afs = AFSClient(rpc=rpc)
+    snapshot.init(NUM_WORKERS)
 
   async def read_from_afs(self, path: str):
     try:
@@ -88,20 +88,26 @@ class AFSCoordinator:
   async def handle_worker(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     ad = writer.get_extra_info('peername')
     print(f"Worker connected from {ad}")
-    if not self.tasks:
-        print("No tasks left for new worker")
-        writer.close()
-        await writer.wait_closed()
-        return
+    if self.next_worker_id > NUM_WORKERS:
+      print("Max workers reached, rejecting connection")
+      writer.close()
+      await writer.wait_closed()
+      return
+    
     worker_id = self.next_worker_id
     self.next_worker_id += 1
     self.workers[worker_id] = writer
-    task_chunk = self.tasks.pop(0)
     
-    task = pickle.dumps({"type":"task", "chunk":task_chunk, "workerid": worker_id})
+    if worker_id <= len(self.chunks):
+      task_chunk = self.chunks[worker_id - 1]
+      task = pickle.dumps({"type":"task", "chunk":task_chunk, "workerid": worker_id})
+      try:
+          writer.write(task)
+          await writer.drain()
+      except Exception as e:
+          print(f"Error sending init task to {worker_id}: {e}")
+          return
     try:
-      writer.write(task)
-      await writer.drain()
       while True:
         data = await reader.read(4096)
         if not data:
@@ -121,7 +127,19 @@ class AFSCoordinator:
               message["snapshot_id"],
               message["state"]
           )
+        
+        elif type == "reconnect":
+          wid = message["workerid"]
+          self.workers[wid] = writer
+          print(f"[Coordinator] Worker {wid} RECONNECTED.")
           
+          if wid <= len(self.chunks):
+            original_chunk = self.chunks[wid - 1]
+            task = {"type":"task", "chunk": original_chunk, "workerid": wid}
+            writer.write(pickle.dumps(task))
+            await writer.drain()
+            print(f"[Coordinator] Resent task to Worker {wid}")
+
         elif type == "finish":
           print(f"Worker {worker_id} finished")
           self.finished_workers.add(worker_id)
@@ -133,7 +151,7 @@ class AFSCoordinator:
       print(f"Error with worker {worker_id}: {e}")
     finally:
       if worker_id in self.workers:
-        del self.workers[worker_id]
+        pass
       if not writer.is_closing():
         writer.close()
         await writer.wait_closed()
@@ -142,6 +160,7 @@ class AFSCoordinator:
     await self.initialize_afs()
     numbers = await self.read_from_afs(INPUT_FILE)
     self.tasks = self.split_numbers(numbers, NUM_WORKERS)
+    self.chunks = self.split_numbers(numbers, NUM_WORKERS)
     snapshot_task = asyncio.create_task(self.snapshot_loop())
 
     server = await asyncio.start_server(self.handle_worker, HOST, PORT)
@@ -150,9 +169,7 @@ class AFSCoordinator:
 
     while len(self.finished_workers) < NUM_WORKERS:
       await asyncio.sleep(1)
-      if not self.workers and not self.tasks and len(self.finished_workers) < NUM_WORKERS:
-          print("All workers disconnected before finishing.")
-          break
+
     print("All workers finished.")
 
     server.close()
