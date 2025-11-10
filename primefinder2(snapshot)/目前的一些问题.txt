@@ -22,3 +22,5 @@ ack机制（coordinator发一次ok，worker收到后关闭）是ai建议我加�
 崩溃模拟是再worker代码段里，在75行处可以设置崩溃概率，断掉后要手动重启
 
 任务跟踪+心跳检测基本完成，与snapshots的coordinator—worker版本对接一下就行，之后再实践测试运行存在的问题
+
+update11/10: 我用gpt结合了我们两个version的，在xxx_mix中
