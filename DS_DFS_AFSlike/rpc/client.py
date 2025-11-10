@@ -16,7 +16,7 @@ import time
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
 
-from rpc.framing import write_frame, read_frame
+from DS_DFS_AFSlike.rpc.framing import write_frame, read_frame
 
 # Return codes that the server uses;
 OK = 0

@@ -6,7 +6,7 @@ import os
 from DS_DFS_AFSlike.afs.client import AFSClient
 from DS_DFS_AFSlike.rpc.client import RPCClient
 
-async def upload_test(input_file="data/test1000.txt", path="/data/test1000.txt"):
+async def upload_test(input_file="primefinder2_snapshot/data/test1000.txt", path="primefinder2_snapshot/data/test1000.txt"):
   print("UPLOAD TEST DATA TO AFS")
   print("=" * 60)
   #if file local
@@ -78,7 +78,7 @@ async def test_connect():
     return False
 
 async def main():
-  if not test_connect(): return
+  if not await test_connect(): return
   success = await upload_test()
   if not success:
     print("Fail to upload test data")

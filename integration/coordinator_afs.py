@@ -11,7 +11,7 @@ from DS_DFS_AFSlike.afs.client import AFSClient
 HOST = 'localhost'
 PORT = 5000
 NUM_WORKERS = 4
-SNAPSHOT = "coord_snapshot"
+SNAPSHOT = "coordinator_snapshot"
 
 class AFSCoordinator:
   #coordinator now uses AFS
@@ -29,7 +29,7 @@ class AFSCoordinator:
   async def read_from_afs(self, path: str):
     try:
       fd = await self.afs.open(path, mode="r")
-      content = await self.afs.read(fd)
+      content = self.afs.read(fd)
       await self.afs.close(fd)
       lines = content.decode('utf-8').split("\n")
       numbers = [int(line.strip()) for line in lines if line.strip()]
@@ -40,7 +40,7 @@ class AFSCoordinator:
       raise
   async def save_sp_afs(self, snapshot: str, data: dict):
     """save coordinator snapshots to AFS"""
-    path = f"/snapshots/{snapshot}.pkl"
+    path = f"cache/primefinder2_snapshot/snapshots/{snapshot}.pkl"
     try:
       bytes = pickle.dumps(data)
       try:
@@ -48,17 +48,17 @@ class AFSCoordinator:
       except:
         #file exists
         fd = await self.afs.open(path, mode="w")
-      await self.afs.write(fd, bytes)
+      self.afs.write(fd, bytes)
       await self.afs.close(fd)
       print(f"Coordinator snapshots saved to AFS: {path}")
     except Exception as e:
       print(f"Error saving snapshot: {e}")
   async def load_sp_afs(self, snapshot: str):
     """Load snapshot from AFS"""
-    path = f"/snapshots/{snapshot}.pkl"
+    path = f"cache/primefinder2_snapshot/snapshots/{snapshot}.pkl"
     try:
       fd = await self.afs.open(path, mode="r")
-      content = await self.afs.read(fd)
+      content = self.afs.read(fd)
       await self.afs.close(fd)
       data = pickle.loads(content)
       print(f"Coordinator loads snapshot form AFS: {path}")
@@ -74,7 +74,7 @@ class AFSCoordinator:
         fd = await self.afs.create(path)
       except:
         fd = await self.afs.open(path, mode="w")
-      await self.afs.write(fd, result.encode('utf-8'))
+      self.afs.write(fd, result.encode('utf-8'))
       await self.afs.close(fd)
       print(f"Coordinator save results: {len(primes)}")
     except Exception as e:
@@ -98,7 +98,7 @@ class AFSCoordinator:
       "done": self.done_chunks,
       "primes": list(self.primes)
     }
-  async def handle_worder(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+  async def handle_worker(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     ad = writer.get_extra_info('peername')
     chunk = None
     chunk_id = None
@@ -152,7 +152,7 @@ class AFSCoordinator:
     print("All tasks from queue have been processed.")
     server.close()
 
-  async def run(self, input = "/data/test1000.txt", output = "/outputs/primes_distributed.txt"):
+  async def run(self, input = "/primefinder2_snapshot/data/test1000.txt", output = "/outputs/primes_distributed.txt"):
     """main logic with AFS"""
     await self.initialize_afs()
     self.rest_queue = asyncio.Queue()
@@ -202,7 +202,7 @@ async def main():
   coordinator = AFSCoordinator(afs_servers)
   try:
     await coordinator.run(
-      input="/data/test1000.txt",
+      input="/primefinder2_snapshot/data/test1000.txt",
       output="/outputs/primes_distributed.txt"
     )
   except KeyboardInterrupt:

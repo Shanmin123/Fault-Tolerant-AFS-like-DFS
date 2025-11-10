@@ -17,7 +17,7 @@ class AFSWorker:
     self.worker_id = worker_id
     self.afs_servers = afs_servers
     self.afs: AFSClient = None
-    self.path = f"/snapshots/worker_{worker_id}.pkl"
+    self.path = f"cache/primefinder2_snapshot/snapshots/worker_{worker_id}.pkl"
   async def initialize_afs(self):
     rpc = RPCClient(self.afs_servers, retries=2)
     self.afs = AFSClient(rpc)
@@ -31,7 +31,7 @@ class AFSWorker:
       except:
         #file exists
         fd = await self.afs.open(self.path, mode="w")
-      await self.afs.write(fd, bytes)
+      self.afs.write(fd, bytes)
       await self.afs.close(fd)
       print(f"Worker{self.worker_id} snapshots saved to AFS")
     except Exception as e:
@@ -40,7 +40,7 @@ class AFSWorker:
   async def load_sp_afs(self):
     try:
       fd = await self.afs.open(self.path, mode="r")
-      content = await self.afs.read(fd)
+      content = self.afs.read(fd)
       await self.afs.close(fd)
       data = pickle.loads(content)
       print(f"Worker{self.worker_id} loads snapshot form AFS: {self.path}")

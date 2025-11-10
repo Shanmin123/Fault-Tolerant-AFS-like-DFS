@@ -3,7 +3,7 @@ import base64
 import json
 from pathlib import Path
 from typing import Dict, Optional
-from rpc.client import RPCClient
+from DS_DFS_AFSlike.rpc.client import RPCClient
 import uuid
 
 class LocalCache:

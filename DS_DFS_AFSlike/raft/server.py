@@ -5,11 +5,11 @@ Integrates Raft consensus with the AFS RPC server for replicated file storage.
 import asyncio
 import sys
 from typing import Optional, List, Dict
-from afs.handlers import Open, TestAuth, Create, GetFile, PutFile
-from rpc.server import RPCServer
-from rpc.framing import read_frame, write_frame
-from raft.state import Node, RaftNode
-from raft.rpc import RaftRPC
+from DS_DFS_AFSlike.afs.handlers import Open, TestAuth, Create, GetFile, PutFile
+from DS_DFS_AFSlike.rpc.server import RPCServer
+from DS_DFS_AFSlike.rpc.framing import read_frame, write_frame
+from DS_DFS_AFSlike.raft.state import Node, RaftNode
+from DS_DFS_AFSlike.raft.rpc import RaftRPC
 
 class RaftServer:
   """
