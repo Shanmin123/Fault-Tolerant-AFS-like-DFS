@@ -2,9 +2,10 @@ import socket
 import pickle
 import math
 import threading
-
+import select
 import snapshot
 import time
+import os
 
 HOST = 'localhost'
 PORT = 5000
@@ -30,11 +31,11 @@ def split(nums, n):
     return chunks
 
 finished =set()
-def recieve(workerid, conn, primes, snap):
+def recieve(workerid, conn, primes, chunks):
     while True:
         data = conn.recv(4096)
-        # if not data:
-        #     break
+        if not data:
+            break
         message = pickle.loads(data)
         t = message.get("type")
         if t == "result":
@@ -42,15 +43,23 @@ def recieve(workerid, conn, primes, snap):
             snapshot.save_inflight(workerid, message["prime"])
         elif t == "marker":
             snapshot.save_snapshot(workerid, message["snapshot_id"], message["state"])
+        elif t == "reconnect":
+            print("resending task")
+            workerid = message["workerid"]
+            # chunk = chunks[workerid-1]
+            task = {"type":"task", "chunk":chunks[workerid-1], "workerid": workerid}
+            task = pickle.dumps(task)
+            conn.sendall(task)
+            print("resent task")
         elif t == "finish":
             print("Worker", workerid, "finished")
             finished.add(workerid)
             break
 
-def snapshot_loop(workers, snapshot, primes):
+def snapshot_loop(workers,snapshot, primes):
     while True:
         time.sleep(1)
-        sid = snapshot.start(len(primes))
+        sid = (snapshot.start(len(primes)))
         if sid:
             for conn in workers:
                 conn.sendall(pickle.dumps({"type": "marker", "snapshot_id": sid}))
@@ -83,7 +92,7 @@ def coordinator():
     for i, conn in enumerate(workers, start=1):
         t = threading.Thread(
             target=recieve,
-            args=(i, conn, primes, snapshot)
+            args=(i, conn, primes, chunks)
         )
         t.start()
 
@@ -94,14 +103,29 @@ def coordinator():
     t.start()
 
     while True:
+        readable, _, _ = select.select([server], [], [], 0.1)
+        if server in readable:
+            conn, addr = server.accept()
+            print(f"[Coordinator] New connection from {addr}")
+            t = threading.Thread(
+                target=recieve,
+                args=(0, conn, primes, chunks)
+            )
+            t.start()
+
         time.sleep(1)
         if len(finished) == NUM_workers:
             with open("outputs/primesResult.txt", "w") as f:
                 for p in primes:
                     f.write(f"{p}\n")
+            os.remove("snapshots/snapshot_latest.pkl")
 
-            print("finished")
+            print("all task finished")
+
             break
+
+    server.close()
+    os._exit(0)
 
 
 if __name__ == "__main__":

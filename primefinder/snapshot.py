@@ -46,8 +46,11 @@ def save_snapshot(workerid, sid, state):
                 "worker_state": worker_state,
                 "inflight": inflight
             }
-            path = f"snapshots/snapshot_{snapshot_id}.pkl"
-            with open(path, "wb") as f:
+            path1 = f"snapshots/snapshot_{snapshot_id}.pkl"
+            path2 = f"snapshots/snapshot_latest.pkl"
+            with open(path1, "wb") as f:
+                pickle.dump(data, f)
+            with open(path2, "wb") as f:
                 pickle.dump(data, f)
             print(f"{snapshot_id}saved")
             active = False
