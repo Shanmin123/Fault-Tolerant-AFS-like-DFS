@@ -39,8 +39,6 @@ class AFSCoordinator:
     self.total_tasks = 0
     self.finished_tasks_count = 0
     
-    self.next_worker_id = 1
-
   async def initialize_afs(self):
     rpc = RPCClient(self.afs_servers, retries=2)
     self.afs = AFSClient(rpc=rpc)
@@ -116,13 +114,20 @@ class AFSCoordinator:
   
   async def handle_worker(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     ad = writer.get_extra_info('peername')
-    worker_id = self.next_worker_id
-    self.next_worker_id += 1
-    self.workers[worker_id] = writer
-    print(f"Worker {worker_id} connected from {ad}")
-    
-    task_chunk = None
+    worker_id = None
     try:
+      try:
+        hello_msg = await recv_msg(reader)
+      except (asyncio.IncompleteReadError, ConnectionError, EOFError):
+         print(f"Connection from {ad} disconnected before sending 'hello'.")
+         return
+      if hello_msg.get("type") != "hello" or "workerid" not in hello_msg:
+          print(f"Connection from {ad} sent invalid 'hello'. Disconnecting.")
+          return
+      worker_id = hello_msg["workerid"]
+      self.workers[worker_id] = writer
+      print(f"Worker {worker_id} connected from {ad}")
+      task_chunk = None
       if not self.tasks:
         print(f"No tasks left for worker {worker_id}")
         try:
@@ -130,7 +135,7 @@ class AFSCoordinator:
           await send_msg(writer, shutdown_msg)
         except Exception as e:
           print(f"Error sending shutdown to worker {worker_id}: {e}")
-        return 
+        return
         
       task_chunk = self.tasks.pop(0)
       self.tasks_in_progress[worker_id] = task_chunk
@@ -177,15 +182,21 @@ class AFSCoordinator:
           break
 
     except (ConnectionError, EOFError, ConnectionResetError, asyncio.IncompleteReadError) as e:
-      print(f"Worker {worker_id} (from {ad}) disconnected: {e}")
+      if worker_id:
+        print(f"Worker {worker_id} (from {ad}) disconnected: {e}")
+      else:
+        print(f"Connection from {ad} disconnected: {e}")
     except Exception as e:
-      print(f"Error with worker {worker_id}: {e}")
+      if worker_id:
+        print(f"Error with worker {worker_id}: {e}")
+      else:
+        print(f"Error with connection from {ad}: {e}")
     finally:
-      if worker_id in self.workers:
+      if worker_id and worker_id in self.workers:
         del self.workers[worker_id]
         
       #re-queue task
-      if worker_id in self.tasks_in_progress:
+      if worker_id and worker_id in self.tasks_in_progress:
         requeued_task = self.tasks_in_progress.pop(worker_id)
         self.tasks.insert(0, requeued_task)
         print(f"Re-queued task from disconnected worker {worker_id}")
