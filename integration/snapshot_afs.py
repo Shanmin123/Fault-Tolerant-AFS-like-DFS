@@ -7,7 +7,7 @@ from AFS.afs.client import AFSClient
 
 snapshot_id = 0
 active = False
-NUM_workers = 4
+NUM_workers = 0
 marker_received = {}
 inflight = {}
 worker_state = {}
