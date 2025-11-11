@@ -45,7 +45,8 @@ python -m tets_case_1
 
 python -m integration.coordinator_afs \
   --input /tests/data/input_dataset_001.txt \
-  --output /tests/outputs/result_001.txt
+  --output /tests/outputs/result_001.txt \
+  --workers 1
 
 # Terminal 3
 python -m integration.worker_afs 1
@@ -88,7 +89,8 @@ python -m test_case_2
 
 python -m integration.coordinator_afs \
   --input /tests/data/input_combined.txt \
-  --output /tests/outputs/result_merged.txt
+  --output /tests/outputs/result_merged.txt \
+  --workers 3
 
 # Terminal 3
 python -m integration.worker_afs 1
