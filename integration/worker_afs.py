@@ -1,18 +1,33 @@
 """
-Worker for finding prime numbers(stateless)
+Worker for finding prime numbers
 """
 import pickle
 import sys
 import asyncio
 import random
 from primefinder.prime import is_prime
-#reconnect
 from AFS.rpc.client import RPCClient
 from AFS.afs.client import AFSClient
+
+#message framing
+async def send_msg(writer: asyncio.StreamWriter, obj):
+    data = pickle.dumps(obj)
+    writer.write(len(data).to_bytes(4, "big"))
+    writer.write(data)
+    await writer.drain()
+
+async def recv_msg(reader: asyncio.StreamReader):
+    header = await reader.readexactly(4)
+    n = int.from_bytes(header, "big")
+    payload = await reader.readexactly(n)
+    return pickle.loads(payload)
+
 
 HOST = 'localhost'
 PORT = 5000
 SNAPSHOT_LATEST = "snapshots/snapshot_latest.pkl"
+#safety margin for state recovery
+RECOVERY_REWIND_COUNT = 100 
 
 class AFSWorker:
   def __init__(self, worker_id, afs_servers):
@@ -22,7 +37,7 @@ class AFSWorker:
   
   async def initialize_afs(self):
     rpc = RPCClient(self.afs_servers, retries=2)
-    self.afs = AFSClient(rpc)
+    self.afs = AFSClient(rpc=rpc)
 
   async def load_snapshot(self):
     #read latest snapshot from afs
@@ -30,127 +45,172 @@ class AFSWorker:
       try:
         fd = await self.afs.open(SNAPSHOT_LATEST, mode="r")
       except Exception:
+          print(f"[Worker {self.worker_id}] No latest snapshot found.")
           return 0
-      content = self.afs.read(fd)
+      
+      content = await self.afs.read(fd)
       await self.afs.close(fd)
       
       if not content:
         return 0
       snap = pickle.loads(content)
       worker_state = snap.get("worker_state", {})
-      if self.worker_id in worker_state:
-        numid = worker_state[self.worker_id]["numid"]
-        print(f"[Worker {self.worker_id}] recover from index {numid}")
+      
+      worker_id_str = str(self.worker_id)
+      worker_id_int = int(self.worker_id)
+
+      state_to_use = None
+      if worker_id_str in worker_state:
+          state_to_use = worker_state[worker_id_str]
+      elif worker_id_int in worker_state:
+          state_to_use = worker_state[worker_id_int]
+
+      if state_to_use:
+        numid = state_to_use["numid"]
+        print(f"[Worker {self.worker_id}] Found snapshot state, recover from index {numid}")
         return numid
+      
       return 0
     except Exception as e:
       print(f"[Worker {self.worker_id}] Snapshot check failed (continuing as new): {e}")
       return 0
 
-async def run(self):
-  await self.initialize_afs()
-  #reconnect
-  start_numid = await self.load_snapshot()
-  #connect to coor
-  reader: asyncio.StreamReader = None
-  writer: asyncio.StreamWriter = None
-  try:
-    reader, writer = await asyncio.open_connection(HOST, PORT)
-    print(f"[Worker {self.worker_id}] Connected to coordinator")
-  except Exception as e:
-      print(f"Connection failed: {e}")
-      return
-  
-  #re-> reconnect
-  if start_numid > 0:
-    msg = {
-      "type": "reconnect", 
-      "workerid": self.worker_id, 
-      "numid": start_numid
-    }
-    writer.write(pickle.dumps(msg))
-    await writer.drain()
-    print(f"[Worker {self.worker_id}] Sent reconnect message")
-  #task
-  data = await reader.read(8192)
-  if not data:
-    return
-  task = pickle.loads(data)
-  numbers = task["chunk"]
-  if task.get("workerid"):
-    self.worker_id = task["workerid"]
-  print(f"[Worker {self.worker_id}] Processing chunk size: {len(numbers)}")
+  async def run(self):
+    await self.initialize_afs()
+    
+    snapshot_numid = await self.load_snapshot()
+    start_numid = max(0, snapshot_numid - RECOVERY_REWIND_COUNT)
+    if snapshot_numid > 0:
+      print(f"[Worker {self.worker_id}] Recovered from {snapshot_numid}, rewinding to {start_numid} for safety.")
 
-  numid = 0 
-  found = []
-  seen_marker = {}
-  
-  while numid < len(numbers):
-    if numid < start_numid:
-      numid += 1
-      continue
-
-    #simulate crash
-    #0.05% crash
-    if random.random() < 0.0005:
-      print(f"[Worker {self.worker_id}]SIMULATING CRASH at index {numid}")
-      return
-
+    #connect to coor
+    reader: asyncio.StreamReader = None
+    writer: asyncio.StreamWriter = None
     try:
-      marker = await asyncio.wait_for(reader.read(4096), timeout=0.001)
-      if marker:
-        message = pickle.loads(marker)
-        if message.get("type") == "marker":
-            sid = message["snapshot_id"]
-            if not seen_marker.get(sid, False):
-                seen_marker[sid] = True
-                state = {
-                  "workerid": self.worker_id,
-                  "numid": numid,
-                  "found_count": len(found)
-                }
-                marker_resp = pickle.dumps({
-                  "type": "marker",
-                  "snapshot_id": sid,
-                  "state": state
-                })
-                writer.write(marker_resp)
-                await writer.drain()
-    except asyncio.TimeoutError:
-      pass 
+      reader, writer = await asyncio.open_connection(HOST, PORT)
+      print(f"[Worker {self.worker_id}] Connected to coordinator")
     except Exception as e:
-      print(f"Error reading: {e}")
-      break
+        print(f"Connection failed: {e}")
+        return
+    
+    try:
+      #re-> reconnect
+      if snapshot_numid > 0:
+        msg = {
+          "type": "reconnect", 
+          "workerid": self.worker_id, 
+          "numid": start_numid
+        }
+        await send_msg(writer, msg)
+        print(f"[Worker {self.worker_id}] Sent reconnect message")
+      
+      #task
+      print(f"[Worker {self.worker_id}] Waiting for task...")
+      task = await recv_msg(reader)
+      if not task or task.get("type") != "task":
+        print(f"[Worker {self.worker_id}] Did not receive valid task.")
+        return
 
-    n = numbers[numid]
-    if is_prime(n):
-      found.append(n)
-      result = pickle.dumps({"type": "result", "prime": n, "workerid": self.worker_id})
-      writer.write(result)
-      await writer.drain()
+      numbers = task["chunk"]
+      if task.get("workerid"):
+        self.worker_id = task["workerid"]
+      print(f"[Worker {self.worker_id}] Processing chunk size: {len(numbers)}")
+
+      numid = 0 
+      found = []
+      seen_marker = {}
+      processed_since_yield = 0
+      
+      while numid < len(numbers):
+        #skip work we've already done (from snapshot)
+        if numid < start_numid:
+          numid += 1
+          continue
+
+        #simulate crash
+        #0.05% crash
+        if random.random() < 0.0005:
+          print(f"[Worker {self.worker_id}] SIMULATING CRASH at index {numid}")
+          return
+
+        try:
+          message = await asyncio.wait_for(recv_msg(reader), timeout=0.001)
+          if message and message.get("type") == "marker":
+              sid = message["snapshot_id"]
+              if not seen_marker.get(sid, False):
+                  seen_marker[sid] = True
+                  state = {
+                    "workerid": self.worker_id,
+                    "numid": numid,
+                    "found_count": len(found)
+                  }
+                  marker_resp = {
+                    "type": "marker",
+                    "snapshot_id": sid,
+                    "state": state,
+                    "workerid": self.worker_id
+                  }
+                  await send_msg(writer, marker_resp)
+                  print(f"[Worker {self.worker_id}] Sent marker response for {sid}")
+        except asyncio.TimeoutError:
+          pass
+        except Exception as e:
+          print(f"Error reading for marker: {e}")
+          break
+
+        n = numbers[numid]
+        if is_prime(n):
+          found.append(n)
+          result = {"type": "result", "prime": n, "workerid": self.worker_id}
+          await send_msg(writer, result)
+            
+        numid += 1
+        processed_since_yield += 1
         
-    numid += 1
-    await asyncio.sleep(0.002)
+        #yield to event loop every 100 numbers
+        if processed_since_yield >= 100:
+          await asyncio.sleep(0)
+          processed_since_yield = 0
 
-  finish = pickle.dumps({"type": "finish", "workerid": self.worker_id})
-  writer.write(finish)
-  await writer.drain()
-  print(f"[Worker {self.worker_id}] Finished")
-  
-  writer.close()
-  await writer.wait_closed()
+      finish = {"type": "finish", "workerid": self.worker_id}
+      await send_msg(writer, finish)
+      print(f"[Worker {self.worker_id}] Finished task")
+      
+    except (ConnectionError, EOFError, ConnectionResetError, asyncio.IncompleteReadError) as e:
+        print(f"[Worker {self.worker_id}] Coordinator disconnected: {e}")
+    except Exception as e:
+        print(f"[Worker {self.worker_id}] Error: {e}")
+        import traceback; traceback.print_exc()
+    finally:
+        if writer:
+          writer.close()
+          await writer.wait_closed()
+
 
 async def main(worker_id):
   afs_servers = [
-    "127.0.0.1:8888", 
-    #"127.0.0.1:8889", 
-    #"127.0.0.1:8890"
+    "127.0.0.1:8888" 
     ]
-  worker = AFSWorker(worker_id, afs_servers)
-  await worker.run()
+  
+  #loop to keep working until no tasks are left
+  while True:
+    worker = AFSWorker(worker_id, afs_servers)
+    try:
+      await worker.run()
+    except Exception as e:
+      print(f"[Worker {worker_id}] Main run failed with: {e}")
+    print(f"[Worker {worker_id}] Re-connecting for new task in 3 seconds...")
+    await asyncio.sleep(3)
+
 
 if __name__ == "__main__":
   if len(sys.argv) < 2:
     sys.exit(1)
+  
   worker_id = sys.argv[1]
-  asyncio.run(main(worker_id))
+  try:
+      worker_id_int = int(worker_id)
+  except ValueError:
+      print("Error: Worker ID must be an integer.")
+      sys.exit(1)
+  asyncio.run(main(worker_id_int))
