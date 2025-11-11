@@ -156,9 +156,9 @@ class AFSCoordinator:
         writer.close()
         await writer.wait_closed()
 
-  async def run(self):
+  async def run(self, input_path: str, output_path: str):
     await self.initialize_afs()
-    numbers = await self.read_from_afs(INPUT_FILE)
+    numbers = await self.read_from_afs(input_path)
     self.tasks = self.split_numbers(numbers, NUM_WORKERS)
     self.chunks = self.split_numbers(numbers, NUM_WORKERS)
     snapshot_task = asyncio.create_task(self.snapshot_loop())
