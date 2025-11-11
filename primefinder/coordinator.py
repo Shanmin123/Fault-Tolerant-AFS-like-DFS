@@ -57,8 +57,23 @@ def recieve(workerid, conn, primes, chunks):
             break
 
 def snapshot_loop(workers,snapshot, primes):
+    written_primes = set()
+    output_path = snapshot.output_file
+
+    if os.path.exists(output_path):
+        written_primes = readFile(output_path)
+        print(f"[SnapshotLoop] recovered {len(written_primes)} primes from {output_path}")
+
     while True:
         time.sleep(1)
+        new_primes = primes - written_primes
+        if new_primes:
+            with open(output_path, "a") as f:
+                for p in sorted(new_primes):
+                    f.write(f"{p}\n")
+            written_primes |= new_primes
+            print(f"[SnapshotLoop] wrote {len(new_primes)} new primes to {output_path}")
+
         sid = (snapshot.start(len(primes)))
         if sid:
             for conn in workers:
@@ -66,7 +81,10 @@ def snapshot_loop(workers,snapshot, primes):
 
 
 def coordinator():
-    numbers = readFile("data/test10000.txt")
+    input_file = input("enter the path of input file ").strip()
+    output_file = input("enter the path of output file ").strip()
+
+    numbers = readFile(input_file)
     chunks = split(numbers, NUM_workers)
     primes = set()
 
@@ -87,7 +105,7 @@ def coordinator():
         task = pickle.dumps(task)
         conn.sendall(task)
 
-    snapshot.init(NUM_workers)
+    snapshot.init(NUM_workers,input_file,output_file)
 
     for i, conn in enumerate(workers, start=1):
         t = threading.Thread(
@@ -115,7 +133,7 @@ def coordinator():
 
         time.sleep(1)
         if len(finished) == NUM_workers:
-            with open("outputs/primesResult.txt", "w") as f:
+            with open(output_file, "w") as f:
                 for p in primes:
                     f.write(f"{p}\n")
             os.remove("snapshots/snapshot_latest.pkl")
