@@ -4,7 +4,6 @@ Worker for finding prime numbers
 import pickle
 import sys
 import asyncio
-import random
 from primefinder.prime import is_prime
 from AFS.rpc.client import RPCClient
 from AFS.afs.client import AFSClient
@@ -75,6 +74,22 @@ class AFSWorker:
       print(f"[Worker {self.worker_id}] Snapshot check failed (continuing as new): {e}")
       return 0
 
+  async def message_receiver(self, reader: asyncio.StreamReader, marker_queue: asyncio.Queue, task_queue: asyncio.Queue ):
+    try:
+      while True:
+        msg = await recv_msg(reader) 
+        msg_type = msg.get("type")
+        if msg_type == "marker":
+          await marker_queue.put(msg)
+        elif msg_type == "task":
+          await task_queue.put(msg)
+        else:
+          print(f"[Worker {self.worker_id}] Receiver task received unknown msg: {msg_type}")
+    except (asyncio.IncompleteReadError, ConnectionError, EOFError):
+      print(f"  [Worker {self.worker_id}] Receiver task disconnected.")
+    except Exception as e:
+      print(f"[Worker {self.worker_id}] Receiver task error: {e}")
+
   async def run(self):
     await self.initialize_afs()
     
@@ -93,7 +108,15 @@ class AFSWorker:
         print(f"Connection failed: {e}")
         return
     
+    marker_queue = asyncio.Queue()
+    task_queue = asyncio.Queue()
+    receiver_task = asyncio.create_task(
+      self.message_receiver(reader, marker_queue, task_queue) # 
+    )
+
+
     try:
+      """
       #re-> reconnect
       if snapshot_numid > 0:
         msg = {
@@ -103,10 +126,10 @@ class AFSWorker:
         }
         await send_msg(writer, msg)
         print(f"[Worker {self.worker_id}] Sent reconnect message")
-      
+      """
       #task
       print(f"[Worker {self.worker_id}] Waiting for task...")
-      task = await recv_msg(reader)
+      task = await task_queue.get()
       if not task or task.get("type") != "task":
         print(f"[Worker {self.worker_id}] Did not receive valid task.")
         return
@@ -129,12 +152,13 @@ class AFSWorker:
 
         #simulate crash
         #0.05% crash
-        if random.random() < 0.0005:
-          print(f"[Worker {self.worker_id}] SIMULATING CRASH at index {numid}")
-          return
+        #if random.random() < 0.0005:
+        #  print(f"[Worker {self.worker_id}] SIMULATING CRASH at index {numid}")
+        #  return
 
         try:
-          message = await asyncio.wait_for(recv_msg(reader), timeout=0.001)
+          message = marker_queue.get_nowait()
+          
           if message and message.get("type") == "marker":
               sid = message["snapshot_id"]
               if not seen_marker.get(sid, False):
@@ -152,6 +176,8 @@ class AFSWorker:
                   }
                   await send_msg(writer, marker_resp)
                   print(f"[Worker {self.worker_id}] Sent marker response for {sid}")
+        except asyncio.QueueEmpty:
+           pass
         except asyncio.TimeoutError:
           pass
         except Exception as e:
@@ -159,7 +185,8 @@ class AFSWorker:
           break
 
         n = numbers[numid]
-        if is_prime(n):
+        is_n_prime = await asyncio.to_thread(is_prime, n)
+        if is_n_prime:
           found.append(n)
           result = {"type": "result", "prime": n, "workerid": self.worker_id}
           await send_msg(writer, result)
@@ -168,23 +195,26 @@ class AFSWorker:
         processed_since_yield += 1
         
         #yield to event loop every 100 numbers
-        if processed_since_yield >= 100:
-          await asyncio.sleep(0)
-          processed_since_yield = 0
-
+        #if processed_since_yield >= 100:
+        #  await asyncio.sleep(0)
+        #  processed_since_yield = 0
+        await asyncio.sleep(0.005)
       finish = {"type": "finish", "workerid": self.worker_id}
       await send_msg(writer, finish)
       print(f"[Worker {self.worker_id}] Finished task")
       
     except (ConnectionError, EOFError, ConnectionResetError, asyncio.IncompleteReadError) as e:
-        print(f"[Worker {self.worker_id}] Coordinator disconnected: {e}")
+      print(f"[Worker {self.worker_id}] Coordinator disconnected: {e}")
     except Exception as e:
-        print(f"[Worker {self.worker_id}] Error: {e}")
-        import traceback; traceback.print_exc()
+      print(f"[Worker {self.worker_id}] Error: {e}")
+      import traceback; traceback.print_exc()
     finally:
-        if writer:
-          writer.close()
-          await writer.wait_closed()
+      if 'receiver_task' in locals() and not receiver_task.done():
+          receiver_task.cancel()
+      
+      if writer:
+        writer.close()
+        await writer.wait_closed()
 
 
 async def main(worker_id):

@@ -87,8 +87,12 @@ class AFSCoordinator:
   
   async def snapshot_loop(self):
     while True:
-       #snapshot frequency
+      #snapshot frequency
       await asyncio.sleep(10)
+
+      #what worker is active
+      active_worker_ids = list(self.workers.keys())
+
       current_state = {
         "primes": self.primes,
         "tasks_queued": self.tasks,
@@ -96,16 +100,19 @@ class AFSCoordinator:
         "finished_tasks_count": self.finished_tasks_count,
         "total_tasks": self.total_tasks
       }
-      sid = snapshot.start(current_state)
+      sid = snapshot.start(current_state, active_worker_ids)
       if sid:
-        print(f"Coordinator starting snapshot {sid}")
+        print(f"Coordinator starting snapshot {sid} for workers: {active_worker_ids}")
+        marker_msg = {"type": "marker", "snapshot_id": sid}
         #send marker
         marker_msg = {"type": "marker", "snapshot_id": sid}
-        for worker_id, writer in list(self.workers.items()):
-          try:
-            await send_msg(writer, marker_msg)
-          except ConnectionError:
-            print(f"Error sending marker to worker {worker_id} (disconnected)")
+        for worker_id in active_worker_ids:
+          writer = self.workers.get(worker_id)
+          if writer:
+            try:
+              await send_msg(writer, marker_msg)
+            except ConnectionError:
+              print(f"Error sending marker to worker {worker_id} (disconnected)")
   
   async def handle_worker(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     ad = writer.get_extra_info('peername')
@@ -146,17 +153,17 @@ class AFSCoordinator:
               message["snapshot_id"],
               message["state"]
           )
-        
-        elif msg_type == "reconnect":
-          wid = message["workerid"]
-          self.workers[wid] = writer
-          print(f"[Coordinator] Worker {wid} RECONNECTED.")
-          if wid in self.tasks_in_progress:
-             original_chunk = self.tasks_in_progress[wid]
-             task = {"type":"task", "chunk": original_chunk, "workerid": wid}
-             await send_msg(writer, task)
-             print(f"[Coordinator] Resent task to Worker {wid}")
-
+          """
+          elif msg_type == "reconnect":
+            wid = message["workerid"]
+            self.workers[wid] = writer
+            print(f"[Coordinator] Worker {wid} RECONNECTED.")
+            if wid in self.tasks_in_progress:
+              original_chunk = self.tasks_in_progress[wid]
+              task = {"type":"task", "chunk": original_chunk, "workerid": wid}
+              await send_msg(writer, task)
+              print(f"[Coordinator] Resent task to Worker {wid}")
+          """
         elif msg_type == "finish":
           print(f"Worker {worker_id} finished task")
           self.finished_tasks_count += 1
@@ -190,7 +197,7 @@ class AFSCoordinator:
       content = await self.afs.read(fd)
       await self.afs.close(fd)
       snapshot_data = pickle.loads(content)
-      #restart coor
+      
       state = snapshot_data["coordinator_state"]
       self.primes = state["primes"]
       self.tasks = state["tasks_queued"]
@@ -199,6 +206,13 @@ class AFSCoordinator:
       self.total_tasks = state["total_tasks"]
       for worker_id, primes_list in snapshot_data.get("inflight", {}).items():
         self.primes.update(primes_list)
+
+      print(f"Re-queuing {len(self.tasks_in_progress)} tasks that were in progress.")
+      in_progress_chunks = [chunk for chunk in self.tasks_in_progress.values()]
+      self.tasks = in_progress_chunks + self.tasks 
+      self.tasks_in_progress = {}
+      #restore message
+      print(f"Restored state: {self.finished_tasks_count}/{self.total_tasks} tasks done. {len(self.primes)} primes found.")
     except Exception as e:
       print(f"No snapshot found ({e}), starting fresh.")
       numbers = await self.read_from_afs(input_path)

@@ -18,31 +18,38 @@ def init(n):
     global NUM_workers
     NUM_workers = n
 
-def start(coordinator_state_snapshot: dict):
+def start(coordinator_state_snapshot: dict, active_worker_ids: list):
     global snapshot_id, active, marker_received, inflight, worker_state, local_state
     if active == True:
         return None
+    if not active_worker_ids:
+        print("[Snapshot] No active workers, skipping snapshot.")
+        return None
+
     snapshot_id += 1
     active = True
-    for i in range (NUM_workers):
-        marker_received[i+1] = False
-        inflight[i+1] = []
+
+    marker_received = {}
+    inflight = {}
+    worker_state = {}
+    for w_id in active_worker_ids:
+        marker_received[w_id] = False
+        inflight[w_id] = []
     worker_state = {}
     local_state = coordinator_state_snapshot
     local_state["snapshot_time"] = time.time()
     print(f"start{snapshot_id} ")
     return snapshot_id
 
-def save_inflight(wokerid, prime):
+def save_inflight(workerid, prime):
+    global active, marker_received, inflight
     if active:
-        for i in inflight:
-            if not marker_received.get(i, False):
-                if not marker_received.get(wokerid, False):
-                  inflight[wokerid].append(prime)
-                  break
+        if not marker_received.get(workerid, False):
+            inflight[workerid].append(prime)
 
 #afs-snapshot
 async def save_snapshot(afs_client: AFSClient, snapshot_name: str, workerid, sid, state):
+    print("THIS IS FUNCTION IS CALLED")
     #save worker state, if all ack, save to afs
     global active, worker_state, marker_received
     if active and sid == snapshot_id and not marker_received[workerid]:
@@ -67,14 +74,14 @@ async def save_snapshot(afs_client: AFSClient, snapshot_name: str, workerid, sid
                 except:
                     #already exist
                     fd = await afs_client.open(path, "w")
-                afs_client.write(fd, bytes)
+                await afs_client.write(fd, bytes)
                 await afs_client.close(fd)
 
                 try:
                     fd_latest = await afs_client.create(path_latest)
                 except:
                     fd_latest = await afs_client.open(path_latest, mode="w")
-                afs_client.write(fd_latest, bytes)
+                await afs_client.write(fd_latest, bytes)
                 await afs_client.close(fd_latest)
 
                 print(f"[Snapshot] Snapshot {snapshot_id} saved to AFS at {path}")
