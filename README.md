@@ -108,12 +108,23 @@ Should match:
 13
 17
 ```
+---
+
+### 2. File Server Fault Tolerance
+**Server crash during read**
+```bash
+python -m test_case_3.1
+```
+**Client crash during write**
+```bash
+python -m test_case_3.2
+```
 
 ---
 ### 3. File Server Replication
 **Replication & Recovery**
 ```bash
-python -m test_case_3
+python -m test_case_4
 ```
 
 ### 4. Distributed Prime Finder FT
