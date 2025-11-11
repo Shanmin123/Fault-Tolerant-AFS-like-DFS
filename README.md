@@ -110,6 +110,11 @@ Should match:
 ```
 
 ---
+### 3. File Server Replication
+**Replication & Recovery**
+```bash
+python -m test_case_3
+```
 
 ### 4. Distributed Prime Finder FT
 
