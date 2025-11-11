@@ -7,6 +7,9 @@ This is a distributed systems project composed of two main parts:
 ## Table of Contents
 
 - [Test Cases](#test-case)
+    - [Case 1](#1-basic-functionality)
+    - [Case 3](#3-file-server-replication)
+    - [Case 4](#4-distributed-prime-finder-ft)
 - [Run Guide](#run-guide)
 - [Integration](#integration)
 - [File System](#afs-like-distributed-file-system-with-raft-consensus)
