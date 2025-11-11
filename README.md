@@ -6,11 +6,106 @@ This is a distributed systems project composed of two main parts:
 
 ## Table of Contents
 
+- [Test Cases](#test-case)
 - [Run Guide](#run-guide)
 - [Integration](#integration)
 - [File System](#afs-like-distributed-file-system-with-raft-consensus)
 - [Prime Finder](#distributed-prime-finder)
-- [Test Suite](#test-suite)
+
+---
+## Test case
+
+**Before test**
+```bash
+# clean cache
+rm -rf AFS/srv_data/
+rm -rf AFS/cache/
+
+# create files if not exist
+mkdir -p tests/data/
+```
+
+### 1. Basic Functionality
+
+**Single Worker, Single File**
+```bash
+# create a file including 10 numbers
+echo -e "2\n3\n4\n5\n6\n7\n8\n9\n11\n13" > tests/data/input_dataset_001.txt
+
+# Terminal 1
+python -m AFS.run_afs_server
+
+# Terminal 2
+python -m tets_case_1
+
+python -m integration.coordinator_afs \
+  --input /tests/data/input_dataset_001.txt \
+  --output /tests/outputs/result_001.txt
+
+# Terminal 3
+python -m integration.worker_afs 1
+```
+
+Check your output: `cat srv_data/tests/outputs/result_001.txt`
+Should match:
+```
+2
+3
+5
+7
+11
+13
+```
+
+**Multiple Workers, Multiple Files**
+```bash
+# File 1: Primes are 2, 3, 5
+echo -e "2\n3\n4\n5\n6" > tests/data/input_dataset_001.txt
+
+# File 2: Primes are 5, 7, 11 (Duplicate '5')
+echo -e "5\n7\n8\n9\n11" > tests/data/input_dataset_002.txt
+
+# File 3: Primes are 11, 13, 17 (Duplicate '11')
+echo -e "11\n12\n13\n14\n17" > tests/data/input_dataset_003.txt
+
+# Combine into 1 file
+cat tests/data/input_dataset_001.txt \
+    tests/data/input_dataset_002.txt \
+    tests/data/input_dataset_003.txt \
+    > tests/data/input_combined.txt
+```
+```bash
+# Terminal 1
+python -m AFS.run_afs_server
+
+# Terminal 2
+python -m test_case_2
+
+python -m integration.coordinator_afs \
+  --input /tests/data/input_combined.txt \
+  --output /tests/outputs/result_merged.txt
+
+# Terminal 3
+python -m integration.worker_afs 1
+
+# Terminal 4
+python -m integration.worker_afs 2
+
+# Terminal 5
+python -m integration.worker_afs 3
+```
+
+Check your output: `cat srv_data/tests/outputs/result_merged.txt`
+Should match:
+```
+2
+3
+5
+7
+11
+13
+17
+```
 
 ---
 
@@ -43,7 +138,7 @@ python -m AFS.raft.server server3 127.0.0.1 8890 127.0.0.1:8888 127.0.0.1:8889
 
 ```bash
 # Generate test data (if not exists)
-python -m primefinder.numers_generator
+python -m tests.numers_generator
 
 # Upload to AFS
 python -m integration.data_to_afs
@@ -78,7 +173,7 @@ python -m integration.worker_afs 4
 
 ### Overview
 
-The integration directory contains the final, combined system. It adapts the logic from primefinder to use the AFS as its storage backend.
+The integration directory contains the final, combined system. It adapts the logic from tests to use the AFS as its storage backend.
 
 1. **Coordinator**: Drives the Chandy-Lamport algorithm, sending marker messages and handling asyncio connections from workers
 2. **Worker**: A stateless asyncio client that computes primes and responds to marker messages. It does not save its own state
@@ -144,7 +239,7 @@ This system implements a distributed prime finder based on the Chandy-Lamport gl
 
 ### Structure
 ```
-primefinder/
+tests/
 ├── data/
 │   └── test1000.txt        # Sample data
 ├── coordinator.py          # Original coordinator (threading-based)
@@ -155,72 +250,4 @@ primefinder/
 └── worker.py               # Original worker (threading-based)
 ```
 
----
 
-## Test Suite
-
-These tests are located in the AFS/ directory and are used to verify the file system's functionality independent of the Prime Finder.
-
-`test_basic_operations.py`
-
-Purpose: Verifies core file operations (create, write, read, close). It writes data, flushes it (on close), then re-opens and reads the data to ensure it matches.
-
-How to Run:
-
-```bash
-# Against a single server (requires run_afs_server.py)
-python -m AFS.test_basic_operations
-
-# Against a full Raft cluster
-python -m AFS.test_basic_operations --raft
-```
-
-`test_cache_validation.py`
-
-Purpose: Tests the client-side whole-file caching. It demonstrates:
-
-First open fetches from the server (Cache Miss).
-
-Second open uses the local cache (Cache Hit).
-
-A server-side modification invalidates the cache.
-
-Third open re-fetches the new version (Cache Invalidation).
-
-How to Run: (Requires run_afs_server.py)
-
-```bash
-python -m AFS.test_cache_validation
-```
-
-`test_afs_idempotency_client.py`
-
-Purpose: Verifies that the server correctly handles idempotency keys (op_id). It sends the same Create command twice with the same op_id.
-
-Expected Result: The first call executes, and the second call returns the exact same result without creating a second file or throwing an error.
-
-How to Run: (Requires run_afs_server.py)
-
-```bash
-python -m AFS.test_afs_idempotency_client
-```
-
-`test_connect_cluster.py`
-
-Purpose: A simple "smoke test" for the Raft cluster. It connects to all three servers, relies on the RPCClient to find the leader, and performs a single create/write/read cycle.
-
-How to Run: (Requires the 3-node Raft cluster to be running)
-
-```bash
-python -m AFS.test_connect_cluster
-```
-
-`test_raft.py`
-
-Purpose: A more comprehensive test suite for the Raft cluster. It checks cluster status, basic operations, read/write behavior on followers (writes should be rejected), and provides a prompt for manual leader failure testing.
-
-How to Run: (Requires the 3-node Raft cluster to be running)
-
-```bash
-python -m AFS.test_raft
-```
