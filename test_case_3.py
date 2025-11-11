@@ -304,17 +304,17 @@ async def run_test() -> None:
     failover_payload = make_payload("replication-failover", 60000)
 
     try:
-        print("\n=== Phase 1: baseline replication ===")
+        print("\nPhase 1: baseline replication ")
         version, leader = await bootstrap_file(rpc, path, base_payload)
         await wait_for_consistency(cluster.addresses(True), path, base_payload)
         print("Baseline replication verified on all servers\n")
 
-        print("=== Phase 2: kill leader during write ===")
+        print("Phase 2: kill leader during write ")
         version, new_leader, failed_node = await failover_write(cluster, rpc, path, version, leader, failover_payload)
         await wait_for_consistency(cluster.addresses(True), path, failover_payload)
         print(f"Write completed via {new_leader} after {failed_node} crashed\n")
 
-        print("=== Phase 3: recovery and catch-up ===")
+        print("Phase 3: recovery and catch-up ")
         await cluster.restart(failed_node)
         await wait_for_consistency(cluster.addresses(False), path, failover_payload)
         print("Recovered server is consistent with existing replicas\n")
