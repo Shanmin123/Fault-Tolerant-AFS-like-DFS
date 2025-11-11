@@ -129,7 +129,11 @@ class AFSWorker:
       """
       #task
       print(f"[Worker {self.worker_id}] Waiting for task...")
-      task = await task_queue.get()
+      try:
+        task = await asyncio.wait_for(task_queue.get(), timeout=5.0)
+      except asyncio.TimeoutError:
+        print(f"[Worker {self.worker_id}] Did not receive task in 5s. Assuming zombie connection. Retrying.")
+        return
       if not task or task.get("type") != "task":
         print(f"[Worker {self.worker_id}] Did not receive valid task.")
         return
