@@ -11,13 +11,17 @@ marker_received = {}
 inflight = {}
 worker_state = {}
 local_state = {}
-
+input_file = ""
+output_file = ""
 lock = threading.Lock()
 
-def init(n):
-    global NUM_workers
+def init(n, input, output):
+    global NUM_workers, input_file, output_file
     with lock:
         NUM_workers = n
+        input_file = input
+        output_file = output
+
 
 def start(collected_count):
     global snapshot_id, active, marker_received, inflight, worker_state, local_state
@@ -51,6 +55,8 @@ def save_snapshot(workerid, sid, state):
                 data = {
                     "snapshot_id": snapshot_id,
                     "time": time.time(),
+                    "input_file": input_file,
+                    "output_file": output_file,
                     "number of workers": NUM_workers,
                     "coordinator_state": local_state,
                     "worker_state": worker_state,
