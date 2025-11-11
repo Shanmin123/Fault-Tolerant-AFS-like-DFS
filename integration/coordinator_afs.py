@@ -224,7 +224,7 @@ class AFSCoordinator:
     snapshot_task = asyncio.create_task(self.snapshot_loop())
     server = await asyncio.start_server(
         self.handle_worker, HOST, PORT,
-        #reuse_address=True
+        reuse_address=True
     )
     addr = server.sockets[0].getsockname()
     print(f"Coordinator listening on {addr[0]}:{addr[1]}, waiting for workers.")
