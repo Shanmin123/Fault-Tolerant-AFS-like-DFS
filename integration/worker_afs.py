@@ -81,7 +81,7 @@ class AFSWorker:
         msg_type = msg.get("type")
         if msg_type == "marker":
           await marker_queue.put(msg)
-        elif msg_type == "task":
+        elif msg_type == "task" or msg_type == "shutdown":
           await task_queue.put(msg)
         else:
           print(f"[Worker {self.worker_id}] Receiver task received unknown msg: {msg_type}")
@@ -104,14 +104,20 @@ class AFSWorker:
     try:
       reader, writer = await asyncio.open_connection(HOST, PORT)
       print(f"[Worker {self.worker_id}] Connected to coordinator")
+      #send id to coor not receive allocation
+      hello_msg = {"type": "hello", "workerid": self.worker_id}
+      await send_msg(writer, hello_msg)
+    except ConnectionRefusedError:
+      print(f"[Worker {self.worker_id}] Connection Refused. Assuming job is done.")
+      raise
     except Exception as e:
-        print(f"Connection failed: {e}")
-        return
+      print(f"Connection failed: {e}")
+      return
     
     marker_queue = asyncio.Queue()
     task_queue = asyncio.Queue()
     receiver_task = asyncio.create_task(
-      self.message_receiver(reader, marker_queue, task_queue) # 
+      self.message_receiver(reader, marker_queue, task_queue)
     )
 
 
@@ -132,18 +138,19 @@ class AFSWorker:
       try:
         task = await asyncio.wait_for(task_queue.get(), timeout=5.0)
       except asyncio.TimeoutError:
-        print(f"[Worker {self.worker_id}] Did not receive task in 5s. Assuming zombie connection. Retrying.")
+        raise SystemExit("JobFinished")
+      
+
+      if not task:
+        print(f"[Worker {self.worker_id}] Did not receive valid task.")
         return
-      #shutdown msg
       if task.get("type") == "shutdown":
         print(f"[Worker {self.worker_id}] Received shutdown signal from coordinator. Exiting.")
         raise SystemExit("JobFinished")
-      if not task or task.get("type") != "task":
+      if task.get("type") != "task":
         print(f"[Worker {self.worker_id}] Did not receive valid task.")
         return
       numbers = task["chunk"]
-      if task.get("workerid"):
-        self.worker_id = task["workerid"]
       print(f"[Worker {self.worker_id}] Processing chunk size: {len(numbers)}")
 
       numid = 0 
@@ -234,6 +241,15 @@ async def main(worker_id):
     worker = AFSWorker(worker_id, afs_servers)
     try:
       await worker.run()
+    except SystemExit as e:
+      if str(e) == "JobFinished":
+        print(f"[Worker {worker_id}] Job is finished. Worker process is exiting.")
+        break
+      else:
+        raise
+    except ConnectionRefusedError:
+      print(f"[Worker {worker_id}] Connection refused. Assuming job is done. Exiting.")
+      break
     except Exception as e:
       print(f"[Worker {worker_id}] Main run failed with: {e}")
     print(f"[Worker {worker_id}] Re-connecting for new task in 3 seconds...")
