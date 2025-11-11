@@ -61,7 +61,7 @@ def snapshot_loop(workers,snapshot, primes):
     output_path = snapshot.output_file
 
     if os.path.exists(output_path):
-        written_primes = readFile(output_path)
+        written_primes = set(readFile(output_path))
         print(f"[SnapshotLoop] recovered {len(written_primes)} primes from {output_path}")
 
     while True:
@@ -81,12 +81,30 @@ def snapshot_loop(workers,snapshot, primes):
 
 
 def coordinator():
-    input_file = input("enter the path of input file ").strip()
-    output_file = input("enter the path of output file ").strip()
+    if os.path.exists("snapshots/snapshot_latest.pkl"):
+        f = open("snapshots/snapshot_latest.pkl", "rb")
+        snap = pickle.load(f)
+        f.close()
 
-    numbers = readFile(input_file)
-    chunks = split(numbers, NUM_workers)
-    primes = set()
+        input_file = snap["input_file"]
+        output_file = snap["output_file"]
+        print(f"recovered from snapshot\ninput = {input_file}\noutput = {output_file}")
+
+        numbers = readFile(input_file)
+        chunks = split(numbers, NUM_workers)
+        primes = set()
+
+        restored_primes = set(readFile(output_file))
+        primes |= restored_primes
+
+
+    else:
+        input_file = input("enter the path of input file ").strip()
+        output_file = input("enter the path of output file ").strip()
+
+        numbers = readFile(input_file)
+        chunks = split(numbers, NUM_workers)
+        primes = set()
 
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind((HOST, PORT))
