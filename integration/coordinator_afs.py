@@ -25,7 +25,7 @@ async def recv_msg(reader: asyncio.StreamReader):
 
 HOST = 'localhost'
 PORT = 5000
-NUM_WORKERS = 4
+NUM_WORKERS = None
 SNAPSHOT_NAME = "coordinator_global_snapshot"
 
 class AFSCoordinator:
@@ -295,6 +295,15 @@ async def main():
     except IndexError:
       print("Error: --output flag requires an argument")
       sys.exit(1)
+  global NUM_WORKERS
+  if "--workers" in sys.argv:
+    idx = sys.argv.index("--workers") + 1
+    if idx < len(sys.argv) and sys.argv[idx].isdigit():
+        NUM_WORKERS = int(sys.argv[idx])
+    else:
+        sys.exit(1)
+  else:
+    NUM_WORKERS = 4
 
   print(f"Coordinator starting with:")
   print(f"  Input AFS Path:  {input_path}")
