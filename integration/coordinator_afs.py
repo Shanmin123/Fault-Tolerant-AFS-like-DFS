@@ -269,6 +269,14 @@ class AFSCoordinator:
     snapshot_task.cancel()
     print(f"Total primes found: {len(self.primes)}")
     await self.save_results_to_afs(output_path, self.primes)
+    print("Job complete. Cleaning up snapshots.")
+    try:
+      fd = await self.afs.open(snapshot.SNAPSHOT_LATEST_AFS_PATH, mode="w")
+      await self.afs.write(fd, b"")
+      await self.afs.close(fd)
+      print(f"Truncated latest snapshot: {snapshot.SNAPSHOT_LATEST_AFS_PATH}")
+    except Exception as e:
+      print(f"Warning: Failed to truncate latest snapshot: {e}")
 
 async def main():
   input_path = "/primefinder/data/test1000.txt"
