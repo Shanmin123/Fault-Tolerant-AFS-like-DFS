@@ -12,12 +12,13 @@ marker_received = {}
 inflight = {}
 worker_state = {}
 local_state = {}
+SNAPSHOT_LATEST_AFS_PATH = "snapshots/snapshot_latest.pkl"
 
 def init(n):
     global NUM_workers
     NUM_workers = n
 
-def start(collected_count):
+def start(coordinator_state_snapshot: dict):
     global snapshot_id, active, marker_received, inflight, worker_state, local_state
     if active == True:
         return None
@@ -27,7 +28,8 @@ def start(collected_count):
         marker_received[i+1] = False
         inflight[i+1] = []
     worker_state = {}
-    local_state = {"time": time.time(), "collected": collected_count}
+    local_state = coordinator_state_snapshot
+    local_state["snapshot_time"] = time.time()
     print(f"start{snapshot_id} ")
     return snapshot_id
 

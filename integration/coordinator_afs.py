@@ -89,7 +89,14 @@ class AFSCoordinator:
     while True:
        #snapshot frequency
       await asyncio.sleep(10)
-      sid = snapshot.start(len(self.primes))
+      current_state = {
+        "primes": self.primes,
+        "tasks_queued": self.tasks,
+        "tasks_in_progress": self.tasks_in_progress,
+        "finished_tasks_count": self.finished_tasks_count,
+        "total_tasks": self.total_tasks
+      }
+      sid = snapshot.start(current_state)
       if sid:
         print(f"Coordinator starting snapshot {sid}")
         #send marker
@@ -177,13 +184,30 @@ class AFSCoordinator:
 
   async def run(self, input_path: str, output_path: str):
     await self.initialize_afs()
-    numbers = await self.read_from_afs(input_path)
-    self.tasks = self.split_numbers(numbers, NUM_WORKERS)
-    self.total_tasks = len(self.tasks)
-    self.finished_tasks_count = 0
-    
-    snapshot_task = asyncio.create_task(self.snapshot_loop())
 
+    try:
+      fd = await self.afs.open(snapshot.SNAPSHOT_LATEST_AFS_PATH, mode="r")
+      content = await self.afs.read(fd)
+      await self.afs.close(fd)
+      snapshot_data = pickle.loads(content)
+      #restart coor
+      state = snapshot_data["coordinator_state"]
+      self.primes = state["primes"]
+      self.tasks = state["tasks_queued"]
+      self.tasks_in_progress = state["tasks_in_progress"]
+      self.finished_tasks_count = state["finished_tasks_count"]
+      self.total_tasks = state["total_tasks"]
+      for worker_id, primes_list in snapshot_data.get("inflight", {}).items():
+        self.primes.update(primes_list)
+    except Exception as e:
+      print(f"No snapshot found ({e}), starting fresh.")
+      numbers = await self.read_from_afs(input_path)
+      self.tasks = self.split_numbers(numbers, NUM_WORKERS)
+      self.total_tasks = len(self.tasks)
+      self.finished_tasks_count = 0
+      self.primes = set()
+
+    snapshot_task = asyncio.create_task(self.snapshot_loop())
     server = await asyncio.start_server(
         self.handle_worker, HOST, PORT,
         #reuse_address=True
