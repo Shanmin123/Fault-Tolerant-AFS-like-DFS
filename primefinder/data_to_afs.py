@@ -15,7 +15,7 @@ from AFS.afs.client import AFSClient
 from AFS.rpc.client import RPCClient
 
 LOCAL_INPUT_FILE = "primefinder/data/test10000.txt"
-AFS_INPUT_PATH = "/AFS/srv_data/primefinder/data/test10000.txt"
+AFS_INPUT_PATH = "/primefinder/data/test10000.txt"
 
 
 async def upload_data():

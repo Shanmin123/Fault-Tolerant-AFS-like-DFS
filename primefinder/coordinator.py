@@ -17,8 +17,8 @@ NUM_WORKERS = 4
 SNAPSHOT_NAME = "coordinator_global_snapshot"
 
 # AFS paths (instead of local file paths)
-INPUT_FILE = "/AFS/srv_data/primefinder/data/test10000.txt"
-OUTPUT_FILE = "/AFS/srv_data/primefinder/outputs/primesResult.txt"
+INPUT_FILE = "/primefinder/data/test10000.txt"
+OUTPUT_FILE = "/primefinder/outputs/primesResult.txt"
 
 class AFSCoordinator:
     def __init__(self, afs_servers):
