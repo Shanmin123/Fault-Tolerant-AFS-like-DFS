@@ -125,6 +125,11 @@ class AFSCoordinator:
     try:
       if not self.tasks:
         print(f"No tasks left for worker {worker_id}")
+        try:
+          shutdown_msg = {"type": "shutdown"}
+          await send_msg(writer, shutdown_msg)
+        except Exception as e:
+          print(f"Error sending shutdown to worker {worker_id}: {e}")
         return 
         
       task_chunk = self.tasks.pop(0)
