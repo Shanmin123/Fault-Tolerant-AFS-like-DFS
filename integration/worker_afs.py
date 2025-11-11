@@ -45,13 +45,13 @@ class AFSWorker:
         fd = await self.afs.open(SNAPSHOT_LATEST, mode="r")
       except Exception:
           print(f"[Worker {self.worker_id}] No latest snapshot found.")
-          return 0
+          return (None, 0)
       
       content = await self.afs.read(fd)
       await self.afs.close(fd)
       
       if not content:
-        return 0
+        return (None, 0)
       snap = pickle.loads(content)
       worker_state = snap.get("worker_state", {})
       
@@ -65,14 +65,15 @@ class AFSWorker:
           state_to_use = worker_state[worker_id_int]
 
       if state_to_use:
-        numid = state_to_use["numid"]
+        numid = state_to_use.get("numid", 0)
+        task_id = state_to_use.get("task_id")
         print(f"[Worker {self.worker_id}] Found snapshot state, recover from index {numid}")
-        return numid
+        return (task_id, numid)
       
-      return 0
+      return (None, 0)
     except Exception as e:
       print(f"[Worker {self.worker_id}] Snapshot check failed (continuing as new): {e}")
-      return 0
+      return (None, 0)
 
   async def message_receiver(self, reader: asyncio.StreamReader, marker_queue: asyncio.Queue, task_queue: asyncio.Queue ):
     try:
@@ -93,7 +94,7 @@ class AFSWorker:
   async def run(self):
     await self.initialize_afs()
     
-    snapshot_numid = await self.load_snapshot()
+    saved_task_id, snapshot_numid = await self.load_snapshot()
     start_numid = max(0, snapshot_numid - RECOVERY_REWIND_COUNT)
     if snapshot_numid > 0:
       print(f"[Worker {self.worker_id}] Recovered from {snapshot_numid}, rewinding to {start_numid} for safety.")
@@ -151,6 +152,16 @@ class AFSWorker:
         print(f"[Worker {self.worker_id}] Did not receive valid task.")
         return
       numbers = task["chunk"]
+      current_task_id = task.get("task_id")
+      start_numid = 0
+      
+      if current_task_id and current_task_id == saved_task_id:
+        start_numid = max(0, snapshot_numid - RECOVERY_REWIND_COUNT)
+        print(f"[Worker {self.worker_id}] Task ID {current_task_id} matches snapshot. Recovering from {snapshot_numid}, rewinding to {start_numid}.")
+      elif saved_task_id:
+        print(f"[Worker {self.worker_id}] New task {current_task_id}. Ignoring snapshot for old task {saved_task_id}. Starting from 0.")
+      else:
+        print(f"[Worker {self.worker_id}] New task {current_task_id}. Starting from 0.")
       print(f"[Worker {self.worker_id}] Processing chunk size: {len(numbers)}")
 
       numid = 0 
@@ -180,7 +191,8 @@ class AFSWorker:
                   state = {
                     "workerid": self.worker_id,
                     "numid": numid,
-                    "found_count": len(found)
+                    "found_count": len(found),
+                    "task_id": current_task_id
                   }
                   marker_resp = {
                     "type": "marker",

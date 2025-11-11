@@ -9,6 +9,7 @@ from typing import Set, List, Dict
 from AFS.rpc.client import RPCClient
 from AFS.afs.client import AFSClient
 import integration.snapshot_afs as snapshot
+import uuid
 
 async def send_msg(writer: asyncio.StreamWriter, obj):
     data = pickle.dumps(obj)
@@ -34,8 +35,8 @@ class AFSCoordinator:
     self.primes: Set[int] = set()
     self.workers: Dict[int, asyncio.StreamWriter] = {}
     
-    self.tasks: List[List[int]] = []
-    self.tasks_in_progress: Dict[int, List[int]] = {}
+    self.tasks: List[tuple[str, List[int]]] = []
+    self.tasks_in_progress: Dict[int, tuple[str, List[int]]] = {}
     self.total_tasks = 0
     self.finished_tasks_count = 0
     
@@ -78,9 +79,10 @@ class AFSCoordinator:
     chunks = []
     i = 0
     while i < len(numbers):
-        chunk = numbers[i:i + chunk_size]
-        chunks.append(chunk)
-        i += chunk_size
+      chunk = numbers[i:i + chunk_size]
+      task_id = str(uuid.uuid4())
+      chunks.append( (task_id, chunk) )
+      i += chunk_size
     return chunks
   
   async def snapshot_loop(self):
@@ -137,9 +139,15 @@ class AFSCoordinator:
           print(f"Error sending shutdown to worker {worker_id}: {e}")
         return
         
-      task_chunk = self.tasks.pop(0)
-      self.tasks_in_progress[worker_id] = task_chunk
-      task_msg = {"type":"task", "chunk":task_chunk, "workerid": worker_id}
+      task_id, task_chunk = self.tasks.pop(0)
+      self.tasks_in_progress[worker_id] = (task_id, task_chunk)
+      
+      task_msg = {
+        "type":"task", 
+        "chunk":task_chunk, 
+        "workerid": worker_id, 
+        "task_id": task_id
+      }
       
       await send_msg(writer, task_msg)
       
@@ -197,8 +205,8 @@ class AFSCoordinator:
         
       #re-queue task
       if worker_id and worker_id in self.tasks_in_progress:
-        requeued_task = self.tasks_in_progress.pop(worker_id)
-        self.tasks.insert(0, requeued_task)
+        req_task = self.tasks_in_progress.pop(worker_id) 
+        self.tasks.insert(0, req_task)
         print(f"Re-queued task from disconnected worker {worker_id}")
 
       if not writer.is_closing():
@@ -224,8 +232,8 @@ class AFSCoordinator:
         self.primes.update(primes_list)
 
       print(f"Re-queuing {len(self.tasks_in_progress)} tasks that were in progress.")
-      in_progress_chunks = [chunk for chunk in self.tasks_in_progress.values()]
-      self.tasks = in_progress_chunks + self.tasks 
+      in_progress_tasks = [task_tuple for task_tuple in self.tasks_in_progress.values()]
+      self.tasks = in_progress_tasks + self.tasks 
       self.tasks_in_progress = {}
       #restore message
       print(f"Restored state: {self.finished_tasks_count}/{self.total_tasks} tasks done. {len(self.primes)} primes found.")
