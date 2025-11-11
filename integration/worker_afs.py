@@ -134,10 +134,13 @@ class AFSWorker:
       except asyncio.TimeoutError:
         print(f"[Worker {self.worker_id}] Did not receive task in 5s. Assuming zombie connection. Retrying.")
         return
+      #shutdown msg
+      if task.get("type") == "shutdown":
+        print(f"[Worker {self.worker_id}] Received shutdown signal from coordinator. Exiting.")
+        raise SystemExit("JobFinished")
       if not task or task.get("type") != "task":
         print(f"[Worker {self.worker_id}] Did not receive valid task.")
         return
-
       numbers = task["chunk"]
       if task.get("workerid"):
         self.worker_id = task["workerid"]
