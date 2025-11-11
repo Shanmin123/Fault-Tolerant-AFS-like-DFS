@@ -21,7 +21,6 @@ def _load_meta() -> None:
 async def _save_meta() -> None:
     tmp = _META_FILE.with_suffix(".json.tmp")
     text = json.dumps(_meta, ensure_ascii=False, separators=(",", ":"))
-    # CHANGED: non-blocking write and replace
     await asyncio.to_thread(tmp.write_text, text, encoding="utf-8")
     await asyncio.to_thread(tmp.replace, _META_FILE)
 
@@ -50,12 +49,10 @@ async def Open(path: str, flags: int = 0):
     norm = _norm(path)
     fp = _fs_path(norm)
     if norm not in _meta:
-        # CHANGED: non-blocking exists and read
         if await asyncio.to_thread(fp.exists):
             b = await asyncio.to_thread(fp.read_bytes)
             _meta[norm] = {"version": 1, "size": len(b), "sha256": _sha256(b)}
         else:
-            # CHANGED: non-blocking mkdir
             await asyncio.to_thread(fp.parent.mkdir, parents=True, exist_ok=True)
             _meta[norm] = {"version": 0, "size": 0, "sha256": _sha256(b"")}
         await _save_meta()
@@ -66,18 +63,16 @@ async def Open(path: str, flags: int = 0):
 async def Create(path: str):
     norm = _norm(path)
     fp = _fs_path(norm)
-    # CHANGED: non-blocking exists
     if norm in _meta and await asyncio.to_thread(fp.exists):
         raise FileExistsError(f"File exists:{norm}")
     #create empty file
-    # CHANGED: non-blocking mkdir and write
     await asyncio.to_thread(fp.parent.mkdir, parents=True, exist_ok=True)
     await asyncio.to_thread(fp.write_bytes, b"")
     #initialize metadata
     _meta[norm] = {"version": 1,
                    "size": 0,
                    "sha256": _sha256(b"")}
-    await _save_meta() # CHANGED: call async save
+    await _save_meta() 
     return {"handle": 1, "version": 1, "size": 0}
 
 async def TestAuth(path: str, client_version: int):
@@ -89,10 +84,8 @@ async def TestAuth(path: str, client_version: int):
 async def GetFile(path: str):
     norm = _norm(path)
     fp = _fs_path(norm)
-    # CHANGED: non-blocking exists
     if not await asyncio.to_thread(fp.exists):
         raise FileNotFoundError(f"no such file: {norm}")
-    # CHANGED: non-blocking read
     b = await asyncio.to_thread(fp.read_bytes)
     e = _meta.get(norm) or {"version": 0, "size": 0, "sha256": _sha256(b)}
     return {"bytes": base64.b64encode(b).decode("ascii"), "version": int(e["version"])}
@@ -107,7 +100,6 @@ async def PutFile(path: str, bytes: str, base_version: int):
             raise ValueError("version conflict")
         data = base64.b64decode(bytes.encode("ascii"))
         fp = _fs_path(norm)
-        # CHANGED: non-blocking mkdir and write
         await asyncio.to_thread(fp.parent.mkdir, parents=True, exist_ok=True)
         await asyncio.to_thread(fp.write_bytes, data)
         nv = cur + 1

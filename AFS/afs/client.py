@@ -60,7 +60,6 @@ class AFSClient:
         self._open_files: Dict[int, Dict] = {}
 
     def _normalize_path(self, path: str) -> str:
-        #path start with /
         if not path.startswith("/"):
             path = "/"+path
         return path
