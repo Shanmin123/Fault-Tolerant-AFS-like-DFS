@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="e45e2697-5041-4ffe-86ba-1214919276a1" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/AFS/cache/.meta.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/AFS/cache/demo.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/AFS/srv_data/.meta.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/AFS/srv_data/demo.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/AFS/srv_data/oplog.db" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/AFS/srv_data/oplog.db-shm" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/AFS/srv_data/oplog.db-wal" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/AFS/srv_data/test_connection.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/AFS/srv_data/tmp/afs_demo.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cache/.meta.json" beforeDir="false" afterPath="$PROJECT_DIR$/cache/.meta.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/srv_data/.meta.json" beforeDir="false" afterPath="$PROJECT_DIR$/srv_data/.meta.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/srv_data/oplog.db-shm" beforeDir="false" afterPath="$PROJECT_DIR$/srv_data/oplog.db-shm" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/srv_data/oplog.db-wal" beforeDir="false" afterPath="$PROJECT_DIR$/srv_data/oplog.db-wal" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 2
+}</component>
+  <component name="ProjectId" id="35JEyF07s5jsCU0uajjwLwezzkl" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python.numers_generator.executor&quot;: &quot;Run&quot;,
+    &quot;Python.python -m integration.worker_afs 1.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  }
+}</component>
+  <component name="RunManager">
+    <configuration name="python -m integration.worker_afs 1" type="PythonConfigurationType" factoryName="Python" temporary="true">
+      <module name="DS-2025-Group-coursework1" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="integration.worker_afs" />
+      <option name="PARAMETERS" value="1" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="true" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Python.python -m integration.worker_afs 1" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-b598e85cdad2-JavaScript-PY-252.25557.178" />
+        <option value="bundled-python-sdk-ce6832f46686-7b97d883f26b-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-252.25557.178" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="e45e2697-5041-4ffe-86ba-1214919276a1" name="Changes" comment="" />
+      <created>1762820026279</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1762820026279</updated>
+      <workItem from="1762820027326" duration="2327000" />
+      <workItem from="1762828821442" duration="660000" />
+      <workItem from="1762889845166" duration="303000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/DS_2025_Group_coursework1$numers_generator.coverage" NAME="numers_generator Coverage Results" MODIFIED="1762820220473" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/primefinder" />
+  </component>
+</project>
