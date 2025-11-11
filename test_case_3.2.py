@@ -11,7 +11,7 @@ from AFS.rpc.client import RPCClient
 HOST = "127.0.0.1"
 PORT = 8888
 PROJECT_ROOT = Path(__file__).resolve().parent
-WORK_DIR = PROJECT_ROOT / ".case3_2_single"
+WORK_DIR = PROJECT_ROOT / ".case3_2"
 def generate_payload(tag: str, lines: int) -> bytes:
     return "\n".join(f"{tag}-{i}" for i in range(lines)).encode("utf-8")
 async def start_server() -> asyncio.subprocess.Process:

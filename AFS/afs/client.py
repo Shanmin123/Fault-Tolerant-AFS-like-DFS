@@ -8,12 +8,6 @@ import uuid
 import asyncio
 
 class LocalCache:
-    """
-    Local cache manager under ./cache directory.
-    Stores:
-      - Cached files
-      - .meta.json for version tracking
-    """
     def __init__(self, root: Optional[Path] = None):
         self.root = (root or Path("./cache")).resolve()
         self.meta_file = self.root / ".meta.json"
@@ -36,7 +30,6 @@ class LocalCache:
         await asyncio.to_thread(self.meta_file.write_text, text, encoding="utf-8")
 
     def fs_path(self, path: str) -> Path:
-        """Map logical path to local filesystem path."""
         if not path.startswith("/"):
             path = "/" + path
         p = (self.root / path.lstrip("/")).resolve()
@@ -59,17 +52,7 @@ class LocalCache:
 
 
 class AFSClient:
-    """
-    Thin wrapper on top of RPCClient to provide AFS operations.
-    - open_sync_read(path): keep cache up-to-date
-    - put(path): upload changes using optimistic concurrency
-    - open(path, mode) -> fd
-    - create(path) -> fd
-    - read(fd, size) -> bytes
-    - write(fd, data) -> int
-    - close(fd) -> None
-    """
-
+   
     def __init__(self, rpc: RPCClient, cache: Optional[LocalCache] = None):
         self.rpc = rpc
         self.cache = cache or LocalCache()
@@ -83,7 +66,6 @@ class AFSClient:
         return path
     
     async def open(self, path: str, mode: str="r") -> int:
-        """open a file and return a descripter"""
         path = self._normalize_path(path)
         local_path = self.cache.fs_path(path)
         fetch = True
@@ -110,7 +92,6 @@ class AFSClient:
                     raise IOError(f"Cannot fetch {path}: {r2['err']}")
                 content = base64.b64decode(r2["data"]["bytes"].encode("ascii"))
                 #write to local cache
-                # CHANGED: non-blocking mkdir and write
                 await asyncio.to_thread(local_path.parent.mkdir, parents=True, exist_ok=True)
                 await asyncio.to_thread(local_path.write_bytes, content)
                 await self.cache.set_version_async(path, server_ver)
@@ -128,7 +109,6 @@ class AFSClient:
                 file_obj = await asyncio.to_thread(open, local_path, posix_mode)
             else:
                 raise
-        #allocate file descriptor
         fd = self._next_fd
         self._next_fd += 1
         self._open_files[fd] = {
@@ -141,7 +121,6 @@ class AFSClient:
         return fd
     
     async def create(self, path: str) -> int:
-        """create a new file and return file descriptor"""
         path = self._normalize_path(path)
         local_path = self.cache.fs_path(path)
         op_id = f"create-{path}-{uuid.uuid4()}"
@@ -152,7 +131,6 @@ class AFSClient:
                 raise FileExistsError(f"Cannot create {path}: {r['err']}")
             server_ver = int(r["data"]["version"])
             #create local file
-            # CHANGED: non-blocking mkdir and write
             await asyncio.to_thread(local_path.parent.mkdir, parents=True, exist_ok=True)
             await asyncio.to_thread(local_path.write_bytes, b"")
             await self.cache.set_version_async(path, server_ver)
@@ -176,7 +154,6 @@ class AFSClient:
         if fd not in self._open_files:
             raise ValueError(f"Invalid file descriptor: {fd}")
         file_obj = self._open_files[fd]['file_obj']
-        # CHANGED: Run blocking read in a thread
         return await asyncio.to_thread(file_obj.read, size)
 
     async def write(self, fd: int, data: bytes) -> int:
@@ -187,7 +164,6 @@ class AFSClient:
         if not file_info['write_mode']:
             raise IOError(f"{fd} not opened for writing")
         file_obj = file_info['file_obj']
-        # CHANGED: Run blocking write in a thread
         result = await asyncio.to_thread(file_obj.write, data)
         file_info['modified'] = True
         return result
@@ -197,7 +173,6 @@ class AFSClient:
         if fd not in self._open_files:
             raise ValueError(f"Invalid file descriptor: {fd}")
         file_obj = self._open_files[fd]['file_obj']
-        # CHANGED: Run blocking seek in a thread
         return await asyncio.to_thread(file_obj.seek, offset, whence)
     
     async def close(self, fd: int) -> None:
@@ -213,7 +188,6 @@ class AFSClient:
         if modified:
             try:
                 local_path = self.cache.fs_path(path)
-                # CHANGED: non-blocking read_bytes
                 content = await asyncio.to_thread(local_path.read_bytes)
                 b64_content = base64.b64encode(content).decode("ascii")
                 r = await self.rpc.call("PutFile", {
@@ -225,7 +199,6 @@ class AFSClient:
                     print(f"[client] Warning: Failed to flush {path}: {r['err']}")
                 else:
                     new_ver = int(r["data"]["new_version"])
-                    # CHANGED: use async set_version
                     await self.cache.set_version_async(path, new_ver)
                     print(f"[client] Flushed {path} to server ({len(content)} bytes, v{new_ver})")
             except Exception as e:
@@ -255,7 +228,6 @@ class AFSClient:
                 return {"ok": False, "err": r3["err"]}
             b = base64.b64decode(r3["data"]["bytes"].encode("ascii"))
             fp = self.cache.fs_path(path)
-            # CHANGED: non-blocking mkdir and write
             await asyncio.to_thread(fp.parent.mkdir, parents=True, exist_ok=True)
             await asyncio.to_thread(fp.write_bytes, b)
             await self.cache.set_version_async(path, int(r3["data"]["version"])) # CHANGED
@@ -269,11 +241,9 @@ class AFSClient:
     async def put(self, path: str) -> Dict[str, object]:
         """Upload local file from cache directory."""
         fp = self.cache.fs_path(path)
-        # CHANGED: non-blocking exists
         if not await asyncio.to_thread(fp.exists):
             return {"ok": False, "err": f"local file not found: {fp}"}
 
-        # CHANGED: non-blocking read_bytes
         data = await asyncio.to_thread(fp.read_bytes)
         b64 = base64.b64encode(data).decode("ascii")
         base_v = self.cache.get_version(path)
@@ -283,6 +253,5 @@ class AFSClient:
             return {"ok": False, "err": r["err"]}
 
         new_v = int(r["data"]["new_version"])
-        # CHANGED: use async set_version
         await self.cache.set_version_async(path, new_v)
         return {"ok": True, "new_version": new_v}
