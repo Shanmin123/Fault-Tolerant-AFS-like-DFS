@@ -20,6 +20,8 @@ This is a distributed systems project composed of two main parts:
 # clean cache
 rm -rf AFS/srv_data/
 rm -rf AFS/cache/
+rm -rf srv_data/
+rm -rf integration/cache/
 
 # create files if not exist
 mkdir -p tests/data/
@@ -108,6 +110,42 @@ Should match:
 ```
 
 ---
+
+### 4. Distributed Prime Finder FT
+
+**Coordinator Failure**
+```bash
+# Terminal 1
+python -m AFS.run_afs_server
+
+# Terminal 2
+# create a file including 10000 numbers
+python -m generate_10000
+
+python -m integration.coordinator_afs \
+  --input /tests/data/input_large.txt \
+  --output /tests/outputs/result_large.txt
+
+# Terminal 3
+python -m integration.worker_afs 1
+```
+Check output from Terminal 2  
+Wait til `[Snapshot] Snapshot 1 saved to AFS...`  
+Then `Ctrl+C` manully kill the process  
+Restart the terminal
+```bash
+# Terminal 2
+python -m integration.coordinator_afs \
+  --input /tests/data/input_large.txt \
+  --output /tests/outputs/result_large.txt
+```
+
+Check if this log is shown(numbers may differ):
+```
+Restored state: 1/4 tasks done. 24 primes found.
+```
+
+Then wail til exeucation successfully completed.
 
 ## Run Guide
 This guide explains run the integrated system.
