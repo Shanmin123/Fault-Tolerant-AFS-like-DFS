@@ -118,6 +118,9 @@ Should match:
 ### 2. File Server Fault Tolerance
 **Server crash during read**
 ```bash
+# create a file including 10000 numbers
+python -m generate_10000
+
 python -m test_case_3.1
 ```
 **Client crash during write**
