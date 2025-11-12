@@ -229,7 +229,7 @@ class AFSClient:
             fp = self.cache.fs_path(path)
             await asyncio.to_thread(fp.parent.mkdir, parents=True, exist_ok=True)
             await asyncio.to_thread(fp.write_bytes, b)
-            await self.cache.set_version_async(path, int(r3["data"]["version"])) # CHANGED
+            await self.cache.set_version_async(path, int(r3["data"]["version"]))
             downloaded = True
         else:
             await self.cache.set_version_async(path, server_ver)

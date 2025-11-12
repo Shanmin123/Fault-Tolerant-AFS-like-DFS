@@ -59,7 +59,6 @@ async def Open(path: str, flags: int = 0):
     e = _meta[norm]
     return {"handle": 1, "version": int(e["version"]), "size": int(e["size"])}
 
-#ADD: Create operation for new files
 async def Create(path: str):
     norm = _norm(path)
     fp = _fs_path(norm)
@@ -104,5 +103,5 @@ async def PutFile(path: str, bytes: str, base_version: int):
         await asyncio.to_thread(fp.write_bytes, data)
         nv = cur + 1
         _meta[norm] = {"version": nv, "size": len(data), "sha256": _sha256(data)}
-        await _save_meta() # CHANGED: call async save
+        await _save_meta()
         return {"ok": True, "new_version": nv}

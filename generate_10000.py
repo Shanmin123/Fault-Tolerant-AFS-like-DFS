@@ -32,19 +32,16 @@ async def upload_file_to_afs():
     
     fd = -1
     try:
-        # 1. 尝试创建新文件
-        fd = await afs.create(AFS_FILE_PATH)
-        print(f"AFS: Created new file at {AFS_FILE_PATH}")
+      fd = await afs.create(AFS_FILE_PATH)
+      print(f"AFS: Created new file at {AFS_FILE_PATH}")
     except Exception as e:
-        # 2. 如果创建失败 (例如 FileExistsError)，则以 "w" 模式打开
-        print(f"AFS: File exists, opening in write-mode to overwrite...")
-        try:
-            fd = await afs.open(AFS_FILE_PATH, "w")
-        except Exception as open_e:
-            print(f"AFS: Fatal - Failed to open existing file: {open_e}")
-            sys.exit(1)
+      print(f"AFS: File exists, opening in write-mode to overwrite...")
+      try:
+        fd = await afs.open(AFS_FILE_PATH, "w")
+      except Exception as open_e:
+        print(f"AFS: Fatal - Failed to open existing file: {open_e}")
+        sys.exit(1)
 
-    # 3. 写入内容并关闭 (close会触发上传)
     await afs.write(fd, content_bytes)
     await afs.close(fd)
     print(f"AFS: Successfully uploaded and closed file {AFS_FILE_PATH}")

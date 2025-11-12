@@ -5,7 +5,6 @@ from AFS.afs.handlers import Open, TestAuth, GetFile, PutFile, Create
 import sys
 
 async def main():
-    #ADD: comman-line arg for replication test
     host = sys.argv[1] if len(sys.argv) > 1 else "127.0.0.1"
     port = int(sys.argv[2]) if len(sys.argv) > 2 else 8888
 
@@ -14,7 +13,6 @@ async def main():
     srv.register("TestAuth", TestAuth)
     srv.register("GetFile", GetFile)
     srv.register("PutFile", PutFile)
-    #ADD
     srv.register("Create", Create)
     await srv.serve(host, port)
 
