@@ -8,6 +8,7 @@ This is a distributed systems project composed of two main parts:
 
 - [Test Cases](#test-case)
     - [Case 1](#1-basic-functionality)
+    - [Case 2](#2-file-server-fault-tolerance)
     - [Case 3](#3-file-server-replication)
     - [Case 4](#4-distributed-prime-finder-ft)
 - [Run Guide](#run-guide)
