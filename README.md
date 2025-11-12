@@ -144,7 +144,8 @@ python -m generate_10000
 
 python -m integration.coordinator_afs \
   --input /tests/data/input_large.txt \
-  --output /tests/outputs/result_large.txt
+  --output /tests/outputs/result_large.txt \
+  --workers 1
 
 # Terminal 3
 python -m integration.worker_afs 1
@@ -215,7 +216,7 @@ python -m integration.worker_afs 1
 python -m integration.worker_afs 2
 ```
 After snapshots being saved, kill worker 2 by `ctrl+c`  
-Restart worker 2 
+Restart worker 2  
 You should see log in such format:
 ```
 [Worker 2] Found snapshot state, recover from index 520
