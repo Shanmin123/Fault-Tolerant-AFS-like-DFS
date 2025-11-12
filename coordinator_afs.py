@@ -286,7 +286,7 @@ class AFSCoordinator:
       print(f"Warning: Failed to truncate latest snapshot: {e}")
 
 async def main():
-  input_path = "/primefinder/data/test1000.txt"
+  input_paths = "/primefinder/data/test1000.txt"
   output_path = "/primefinder/outputs/primes_distributed.txt"
 
   if "--input" in sys.argv:
