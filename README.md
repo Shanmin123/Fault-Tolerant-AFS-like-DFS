@@ -8,6 +8,7 @@ This is a distributed systems project composed of two main parts:
 
 - [Test Cases](#test-case)
     - [Case 1](#1-basic-functionality)
+    - [Case 2](#2-file-server-fault-tolerance)
     - [Case 3](#3-file-server-replication)
     - [Case 4](#4-distributed-prime-finder-ft)
 - [Run Guide](#run-guide)
@@ -41,11 +42,12 @@ echo -e "2\n3\n4\n5\n6\n7\n8\n9\n11\n13" > tests/data/input_dataset_001.txt
 python -m AFS.run_afs_server
 
 # Terminal 2
-python -m tets_case_1
+python -m test_case_1
 
 python -m integration.coordinator_afs \
   --input /tests/data/input_dataset_001.txt \
-  --output /tests/outputs/result_001.txt
+  --output /tests/outputs/result_001.txt \
+  --workers 1
 
 # Terminal 3
 python -m integration.worker_afs 1
@@ -88,7 +90,8 @@ python -m test_case_2
 
 python -m integration.coordinator_afs \
   --input /tests/data/input_combined.txt \
-  --output /tests/outputs/result_merged.txt
+  --output /tests/outputs/result_merged.txt \
+  --workers 3
 
 # Terminal 3
 python -m integration.worker_afs 1
@@ -111,7 +114,6 @@ Should match:
 13
 17
 ```
----
 
 ### 2. File Server Fault Tolerance
 **Server crash during read**
@@ -143,7 +145,8 @@ python -m generate_10000
 
 python -m integration.coordinator_afs \
   --input /tests/data/input_large.txt \
-  --output /tests/outputs/result_large.txt
+  --output /tests/outputs/result_large.txt \
+  --workers 1
 
 # Terminal 3
 python -m integration.worker_afs 1
@@ -165,6 +168,62 @@ Restored state: 1/4 tasks done. 24 primes found.
 ```
 
 Then wail til exeucation successfully completed.
+
+**Single Worker Failure**
+```bash
+# Terminal 1
+python -m AFS.run_afs_server
+
+# Terminal 2
+# create a file including 10000 numbers
+python -m generate_10000
+
+python -m integration.coordinator_afs \
+  --input /tests/data/input_large.txt \
+  --output /tests/outputs/result_large.txt \
+  --workers 1
+
+# Terminal 3
+python -m integration.worker_afs 1
+```
+After snapshots being saved, kill worker 1 by `ctrl+c`  
+Expected output from Terminal 2: `Worker 1 (from ...) disconnected...`  
+Restart worker 1: `python -m integration.worker_afs 1`  
+You should see log in such format:
+```
+[Worker 1] Found snapshot state, recover from index 520
+[Worker 1] Recovered from 520, rewinding to 420 for safety.
+```
+
+**Multiple Worker Failure**
+```bash
+# Terminal 1
+python -m AFS.run_afs_server
+
+# Terminal 2
+# create a file including 10000 numbers
+python -m generate_10000
+
+# start at least 2 works
+python -m integration.coordinator_afs \
+  --input /tests/data/input_large.txt \
+  --output /tests/outputs/result_large.txt \
+  --workers 2
+
+# Terminal 3
+python -m integration.worker_afs 1
+
+# Terminal 4
+python -m integration.worker_afs 2
+```
+After snapshots being saved, kill worker 2 by `ctrl+c`  
+Restart worker 2  
+You should see log in such format:
+```
+[Worker 2] Found snapshot state, recover from index 520
+[Worker 2] Recovered from 520, rewinding to 420 for safety.
+```
+
 
 ## Run Guide
 This guide explains run the integrated system.

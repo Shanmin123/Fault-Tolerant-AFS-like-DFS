@@ -7,7 +7,7 @@ from AFS.afs.client import AFSClient
 
 snapshot_id = 0
 active = False
-NUM_workers = 4
+NUM_workers = 0
 marker_received = {}
 inflight = {}
 worker_state = {}
@@ -49,7 +49,6 @@ def save_inflight(workerid, prime):
 
 #afs-snapshot
 async def save_snapshot(afs_client: AFSClient, snapshot_name: str, workerid, sid, state):
-    print("THIS IS FUNCTION IS CALLED")
     #save worker state, if all ack, save to afs
     global active, worker_state, marker_received
     if active and sid == snapshot_id and not marker_received[workerid]:

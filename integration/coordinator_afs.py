@@ -25,7 +25,7 @@ async def recv_msg(reader: asyncio.StreamReader):
 
 HOST = 'localhost'
 PORT = 5000
-NUM_WORKERS = 4
+NUM_WORKERS = None
 SNAPSHOT_NAME = "coordinator_global_snapshot"
 
 class AFSCoordinator:
@@ -269,6 +269,14 @@ class AFSCoordinator:
     snapshot_task.cancel()
     print(f"Total primes found: {len(self.primes)}")
     await self.save_results_to_afs(output_path, self.primes)
+    print("Job complete. Cleaning up snapshots.")
+    try:
+      fd = await self.afs.open(snapshot.SNAPSHOT_LATEST_AFS_PATH, mode="w")
+      await self.afs.write(fd, b"")
+      await self.afs.close(fd)
+      print(f"Truncated latest snapshot: {snapshot.SNAPSHOT_LATEST_AFS_PATH}")
+    except Exception as e:
+      print(f"Warning: Failed to truncate latest snapshot: {e}")
 
 async def main():
   input_path = "/primefinder/data/test1000.txt"
@@ -287,6 +295,15 @@ async def main():
     except IndexError:
       print("Error: --output flag requires an argument")
       sys.exit(1)
+  global NUM_WORKERS
+  if "--workers" in sys.argv:
+    idx = sys.argv.index("--workers") + 1
+    if idx < len(sys.argv) and sys.argv[idx].isdigit():
+        NUM_WORKERS = int(sys.argv[idx])
+    else:
+        sys.exit(1)
+  else:
+    NUM_WORKERS = 4
 
   print(f"Coordinator starting with:")
   print(f"  Input AFS Path:  {input_path}")

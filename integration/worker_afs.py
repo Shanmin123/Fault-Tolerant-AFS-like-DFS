@@ -159,7 +159,7 @@ class AFSWorker:
         start_numid = max(0, snapshot_numid - RECOVERY_REWIND_COUNT)
         print(f"[Worker {self.worker_id}] Task ID {current_task_id} matches snapshot. Recovering from {snapshot_numid}, rewinding to {start_numid}.")
       elif saved_task_id:
-        print(f"[Worker {self.worker_id}] New task {current_task_id}. Ignoring snapshot for old task {saved_task_id}. Starting from 0.")
+        print(f"[Worker {self.worker_id}] New task {current_task_id}. Starting from 0.")
       else:
         print(f"[Worker {self.worker_id}] New task {current_task_id}. Starting from 0.")
       print(f"[Worker {self.worker_id}] Processing chunk size: {len(numbers)}")
