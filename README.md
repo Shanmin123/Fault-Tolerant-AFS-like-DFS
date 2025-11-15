@@ -121,7 +121,7 @@ Should match:
 # create a file including 10000 numbers
 python -m generate_10000
 
-python -m test_case_3.1
+python -m test_case_3_1
 ```
 
 **Server crash during read – Manual server control**
@@ -139,7 +139,7 @@ python -m tc31_manual_flow \
 ```
 **Client crash during write**
 ```bash
-python -m test_case_3.2
+python -m test_case_3_2
 ```
 
 **Client crash during write – Manual client control**
