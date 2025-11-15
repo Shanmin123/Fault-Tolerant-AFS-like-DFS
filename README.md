@@ -123,9 +123,35 @@ python -m generate_10000
 
 python -m test_case_3.1
 ```
+
+**Server crash during read – Manual server control**
+```bash
+# Terminal 1
+python -m AFS.run_afs_server 127.0.0.1 8888
+
+# Terminal 2 (follow prompts to kill/restart server manually)
+python -m tc31_manual_flow \
+  --path /tests/data/tc31_manual_ctrl.txt \
+  --address 127.0.0.1:8888 \
+  --target-bytes 80000000 
+
+
+```
 **Client crash during write**
 ```bash
 python -m test_case_3.2
+```
+
+**Client crash during write – Manual client control**
+```bash
+# Terminal 1
+python -m AFS.run_afs_server 127.0.0.1 8888
+
+# Terminal 2 (follow prompts; run the suggested client commands manually)
+python -m tc32_manual_flow \
+  --path /tests/data/tc32_manual_ctrl.txt \
+  --host 127.0.0.1 \
+  --port 8888
 ```
 
 ---
@@ -133,6 +159,24 @@ python -m test_case_3.2
 **Replication & Recovery**
 ```bash
 python -m test_case_4
+```
+
+
+**Replication & Recovery (manual Raft control)**
+```bash
+# Terminal 1
+python -m AFS.raft.server server1 127.0.0.1 8888 127.0.0.1:8889 127.0.0.1:8890
+
+# Terminal 2
+python -m AFS.raft.server server2 127.0.0.1 8889 127.0.0.1:8888 127.0.0.1:8890
+
+# Terminal 3
+python -m AFS.raft.server server3 127.0.0.1 8890 127.0.0.1:8888 127.0.0.1:8889
+
+# Terminal 4 (follow prompts; kill/restart servers manually when asked)
+python -m tc4_manual_flow \
+  --path /tests/outputs/tc4_manual.txt \
+  --addresses 127.0.0.1:8888 127.0.0.1:8889 127.0.0.1:8890
 ```
 
 ### 4. Distributed Prime Finder FT
@@ -368,5 +412,3 @@ tests/
 ├── snapshot.py             # Original snapshot logic (threading-based)
 └── worker.py               # Original worker (threading-based)
 ```
-
-
