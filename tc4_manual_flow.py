@@ -34,7 +34,14 @@ async def call_rpc_once(address: str, op: str, args: Dict, *, op_id: Optional[st
         deadline_sec=3.0,
         retries=0,
     )
-    return await rpc.call(op, args, op_id=op_id)
+    try:
+        return await rpc.call(op, args, op_id=op_id)
+    except Exception as exc:
+        return {
+            "code": 1,
+            "err": f"{type(exc).__name__}: {exc}",
+            "data": {},
+        }
 
 
 class FailoverRPC:
@@ -58,27 +65,39 @@ class FailoverRPC:
         for attempt in range(attempts):
             target = addresses[attempt % len(addresses)]
             resp = await call_rpc_once(target, op, dict(args), op_id=op_token)
-            if resp["code"] == 0:
-                data = resp.get("data") or {}
-                if data.get("error") == "not_leader":
+            code = resp.get("code", 1)
+            data = resp.get("data") or {}
+            err_text = resp.get("err") or ""
+            data_err = data.get("error") or ""
+            combined_err = err_text or data_err or ""
+            err_lower = combined_err.lower()
+
+            if code == 0:
+                if data_err == "not_leader":
                     hint = data.get("leader_hint")
                     if hint and hint not in addresses:
                         addresses.insert(0, hint)
                     await asyncio.sleep(0.1)
                     continue
-                if data.get("error"):
-                    last_error = data["error"]
+                if op == "PutFile" and data_err:
+                    raise VersionConflictError(combined_err or "version conflict")
+                if "version conflict" in err_lower:
+                    raise VersionConflictError(combined_err or "version conflict")
+                if data_err:
+                    last_error = combined_err
                     await asyncio.sleep(0.2)
                     continue
                 return resp, target
-            last_error = resp.get("err", "")
-            err_lower = last_error.lower()
+
+            last_error = combined_err
+            if op == "PutFile":
+                raise VersionConflictError(combined_err or "version conflict")
             if "version conflict" in err_lower:
-                raise VersionConflictError(last_error or "version conflict")
+                raise VersionConflictError(combined_err or "version conflict")
             if any(keyword in err_lower for keyword in TRANSIENT_KEYWORDS):
                 await asyncio.sleep(0.2)
                 continue
-            print(f"[manual] transient RPC failure on {target}: {last_error}, retrying...")
+            print(f"[manual] transient RPC failure on {target}: {combined_err}, retrying...")
             await asyncio.sleep(0.3)
         raise RuntimeError(last_error or f"{op} failed")
 
@@ -127,7 +146,7 @@ def make_payload(tag: str, lines: int) -> bytes:
 
 async def fetch_from(address: str, path: str) -> bytes:
     resp = await call_rpc_once(address, "GetFile", {"path": path})
-    if resp["code"] != 0:
+    if resp.get("code", 1) != 0:
         raise RuntimeError(resp.get("err", "GetFile failed"))
     payload = resp.get("data", {})
     data = payload.get("bytes")
@@ -174,14 +193,16 @@ async def put_with_retry(
     raise RuntimeError("PutFile retries exceeded")
 
 
-async def bootstrap_file(rpc: FailoverRPC, path: str, payload: bytes) -> Tuple[int, str]:
+async def bootstrap_file(rpc: FailoverRPC, path: str, payload: bytes) -> Tuple[int, str, bytes]:
     try:
         version, leader = await rpc.create(path)
+        version, leader = await put_with_retry(rpc, path, payload, version, prefer=leader)
+        baseline = payload
     except RuntimeError as exc:
-        # When file already exists, fall back to opening the current version.
         print(f"[manual] Create failed for {path} ({exc}), attempting to reuse existing file")
         version, leader = await rpc.open_version(path)
-    return await put_with_retry(rpc, path, payload, version, prefer=leader)
+        version, baseline, leader = await rpc.snapshot(path)
+    return version, leader, baseline
 
 
 async def manual_failover(
@@ -195,20 +216,20 @@ async def manual_failover(
     base_payload = make_payload("replication-initial", base_lines)
     failover_payload = make_payload("replication-failover", failover_lines)
 
-    version, leader = await bootstrap_file(rpc, path, base_payload)
-    await wait_for_consistency(addresses, path, base_payload)
+    version, leader, baseline = await bootstrap_file(rpc, path, base_payload)
+    await wait_for_consistency(addresses, path, baseline)
     print(f"[manual] baseline replicated via {leader} for {path}")
 
     print(
-        f"[manual] starting large write via leader {leader}. "
-        "Kill THIS leader's process (close the matching terminal) while the write is running, "
-        "then press Enter here once it is down."
+        f"[manual] preparing large write via leader {leader}. "
+        "Kill THIS leader's process (close the matching terminal) now, "
+        "then press Enter once it is confirmed down to continue with the write. "
+        "If you want the helper to wait until a new leader is elected automatically, type 'auto'."
     )
-    write_task = asyncio.create_task(put_with_retry(rpc, path, failover_payload, version, prefer=leader))
-    await asyncio.sleep(0.2)
-    await asyncio.to_thread(input, ">>> Kill the leader now, then press Enter to continue...")
-    new_version, new_leader = await write_task
-    print(f"[manual] write finished with new leader {new_leader}, version {new_version}")
+    await asyncio.to_thread(input, ">>> Confirm leader is killed, then press Enter to start the failover write...")
+    write_task = asyncio.create_task(put_with_retry(rpc, path, failover_payload, version, prefer=None))
+    new_version, _ = await write_task
+    print(f"[manual] write finished (version {new_version}). You may now restart the crashed server.")
 
     alive_after = [addr for addr in addresses if addr != leader] or addresses
     await wait_for_consistency(alive_after, path, failover_payload)
