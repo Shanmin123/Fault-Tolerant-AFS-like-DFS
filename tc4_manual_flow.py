@@ -200,15 +200,15 @@ async def manual_failover(
     print(f"[manual] baseline replicated via {leader} for {path}")
 
     print(
-        f"[manual] preparing large write via leader {leader}. "
-        "Kill THIS leader's process (close the matching terminal) now, "
-        "then press Enter once it is confirmed down to continue with the write. "
-        "If you want the helper to wait until a new leader is elected automatically, type 'auto'."
+        f"[manual] starting large write via leader {leader}. "
+        "Kill THIS leader's process (close the matching terminal) while the write is running, "
+        "then press Enter here once it is down."
     )
-    await asyncio.to_thread(input, ">>> Confirm leader is killed, then press Enter to start the failover write...")
-    write_task = asyncio.create_task(put_with_retry(rpc, path, failover_payload, version, prefer=None))
-    new_version, _ = await write_task
-    print(f"[manual] write finished (version {new_version}). You may now restart the crashed server.")
+    write_task = asyncio.create_task(put_with_retry(rpc, path, failover_payload, version, prefer=leader))
+    await asyncio.sleep(0.2)
+    await asyncio.to_thread(input, ">>> Kill the leader now, then press Enter to continue...")
+    new_version, new_leader = await write_task
+    print(f"[manual] write finished with new leader {new_leader}, version {new_version}")
 
     alive_after = [addr for addr in addresses if addr != leader] or addresses
     await wait_for_consistency(alive_after, path, failover_payload)
