@@ -1,17 +1,33 @@
 import argparse
 import asyncio
+import base64
 import time
 import uuid
+from typing import Tuple
 
-from tc32_clients import generate_payload
-from tc32_workflow import (
-    FINAL_LINES,
-    FINAL_TAG,
-    PARTIAL_LINES,
-    PARTIAL_TAG,
-    fetch_remote_bytes,
-    unique_path,
-)
+from AFS.rpc.client import RPCClient
+
+PARTIAL_TAG = "partial"
+PARTIAL_LINES = 2000
+FINAL_TAG = "final"
+FINAL_LINES = 4000
+
+
+def generate_payload(tag: str, lines: int) -> bytes:
+    return "\n".join(f"{tag}-{i}" for i in range(lines)).encode("utf-8")
+
+
+def unique_path(prefix: str = "write_crash") -> str:
+    return f"/tests/data/{prefix}_{int(time.time())}_{uuid.uuid4().hex}.txt"
+
+
+async def fetch_remote_bytes(path: str, host: str, port: int) -> bytes:
+    rpc = RPCClient([f"{host}:{port}"], retries=2)
+    resp = await rpc.call("GetFile", {"path": path})
+    if resp["code"] != 0:
+        raise RuntimeError(resp.get("err", "GetFile failed"))
+    payload = resp.get("data", {}).get("bytes")
+    return base64.b64decode(payload.encode("ascii")) if payload else b""
 
 
 def _partial_command(path: str, host: str, port: int, tag: str, lines: int) -> str:
@@ -52,7 +68,7 @@ async def manual_case32(
     after_crash = b""
     for _ in range(20):
         try:
-            after_crash = await fetch_remote_bytes(path)
+            after_crash = await fetch_remote_bytes(path, host, port)
             break
         except RuntimeError as exc:
             if "CONNECTION_REFUSED" not in str(exc).upper():
@@ -73,7 +89,7 @@ async def manual_case32(
     )
     await asyncio.sleep(0.5)
     expected = generate_payload(final_tag, final_lines)
-    final_data = await fetch_remote_bytes(path)
+    final_data = await fetch_remote_bytes(path, host, port)
     if final_data != expected:
         raise AssertionError("Final data mismatch; healthy client write failed.")
     print("[manual-3.2] Final data verified. Manual client-crash workflow complete.")

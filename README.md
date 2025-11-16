@@ -125,6 +125,12 @@ python -m test_case_3_1
 ```
 
 **Server crash during read – Manual server control**
+Workflow:
+1. Start a single AFS server that will host the file.
+2. Run the manual helper which uploads the payload.
+3. Follow the prompts to kill the server at any time, then restart it.
+4. The helper will read the file after restart and verify the data matches.
+
 ```bash
 # Terminal 1
 python -m AFS.run_afs_server 127.0.0.1 8888
@@ -143,6 +149,12 @@ python -m test_case_3_2
 ```
 
 **Client crash during write – Manual client control**
+Workflow:
+1. Start a single AFS server on the desired port.
+2. Run the manual helper; it prints the `tc32_clients` commands for partial and full writers.
+3. Execute the partial client in another terminal and allow it to crash.
+4. After validation, execute the healthy client and let the helper confirm the final result.
+
 ```bash
 # Terminal 1
 python -m AFS.run_afs_server 127.0.0.1 8888
@@ -163,6 +175,12 @@ python -m test_case_4
 
 
 **Replication & Recovery (manual Raft control)**
+Workflow:
+1. Start three `AFS.raft.server` instances (server1–server3) in separate terminals.
+2. Run the manual flow helper to create and write the test file.
+3. When prompted, manually kill the current leader’s terminal; after the write completes, restart that server.
+4. The helper verifies that all replicas—including the restarted node—contain the latest payload.
+
 ```bash
 # Terminal 1
 python -m AFS.raft.server server1 127.0.0.1 8888 127.0.0.1:8889 127.0.0.1:8890

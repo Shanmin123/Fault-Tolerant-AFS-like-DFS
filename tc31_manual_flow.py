@@ -1,25 +1,70 @@
 import argparse
 import asyncio
-import os
-import signal
+import base64
 import time
 import uuid
-from contextlib import suppress
 from pathlib import Path
-from typing import Optional
+from typing import Tuple
 
-from tc31_workflow import build_payload, read_local_dataset, read_once, upload_fixture
+from AFS.rpc.client import RPCClient
+
+PROJECT_ROOT = Path(__file__).resolve().parent
 
 
-async def _kill_after_delay(pid: int, delay: float) -> None:
-    await asyncio.sleep(max(0.0, delay))
-    try:
-        os.kill(pid, signal.SIGKILL)
-        print(f"[manual-3.1] Auto-kill sent SIGKILL to PID {pid}")
-    except ProcessLookupError:
-        print(f"[manual-3.1] Auto-kill skipped; PID {pid} not found")
-    except PermissionError:
-        print(f"[manual-3.1] Auto-kill failed; insufficient permissions for PID {pid}")
+async def read_local_dataset(file_path: Path) -> Tuple[bytes, str]:
+    data = file_path.read_bytes()
+    sample = data[:200].decode("utf-8", errors="replace")
+    print(f"Successfully read {len(data)} bytes from {file_path}")
+    print("Original sample contents:\n" + sample + "\n")
+    return data, sample
+
+
+def build_payload(dataset: bytes, target_size: int) -> bytes:
+    repeats = max(1, (target_size + len(dataset) - 1) // len(dataset)) if dataset else 1
+    return (dataset * repeats)[:target_size]
+
+
+async def upload_fixture(address: str, path: str, payload: bytes) -> None:
+    rpc = RPCClient(
+        [address],
+        retries=1,
+        connect_timeout=0.5,
+        write_timeout=10.0,
+        read_timeout=10.0,
+        deadline_sec=60.0,
+    )
+    resp = await rpc.call("Create", {"path": path})
+    base_version = 1
+    if resp["code"] != 0:
+        err = resp.get("err", "")
+        if "file exists" in err.lower():
+            open_resp = await rpc.call("Open", {"path": path})
+            if open_resp["code"] != 0:
+                raise RuntimeError(open_resp.get("err", "open failed"))
+            base_version = int(open_resp["data"]["version"])
+            print(f"[manual-3.1] File exists at {path}, reusing version {base_version}")
+        else:
+            raise RuntimeError(err or "create failed")
+    b64 = base64.b64encode(payload).decode("ascii")
+    write = await rpc.call("PutFile", {"path": path, "bytes": b64, "base_version": base_version})
+    if write["code"] != 0:
+        raise RuntimeError(write.get("err", "put failed"))
+
+
+async def read_once(address: str, path: str) -> bytes:
+    rpc = RPCClient(
+        [address],
+        retries=0,
+        connect_timeout=0.5,
+        write_timeout=5.0,
+        read_timeout=10.0,
+        deadline_sec=60.0,
+    )
+    resp = await rpc.call("GetFile", {"path": path})
+    if resp["code"] != 0:
+        raise RuntimeError(resp.get("err", "read failed"))
+    payload = resp["data"].get("bytes")
+    return base64.b64decode(payload.encode("ascii")) if payload else b""
 
 
 async def manual_case31(
@@ -27,8 +72,6 @@ async def manual_case31(
     address: str,
     dataset: Path,
     target_bytes: int,
-    auto_kill_pid: Optional[int],
-    auto_kill_delay: float,
 ) -> None:
     data, sample = await read_local_dataset(dataset)
     if not data:
@@ -36,46 +79,13 @@ async def manual_case31(
     payload = build_payload(data, target_bytes)
     print(f"[manual-3.1] Uploading payload to {path} via {address}")
     await upload_fixture(address, path, payload)
-    print("[manual-3.1] Fixture stored. Starting read; crash the server when prompted.")
+    print("[manual-3.1] Fixture stored. Crash the server whenever you are ready.")
 
-    while True:
-        reader = asyncio.create_task(read_once(address, path))
-        start = time.time()
-        await asyncio.to_thread(
-            input,
-            ">>> Press Enter when you are ready, then immediately kill the server...",
-        )
-        if reader.done():
-            elapsed = time.time() - start
-            print(f"[manual-3.1] Read already finished (took {elapsed:.1f}s). Retrying with a new read...")
-            await asyncio.sleep(0.2)
-            continue
-
-        print(">>> Kill the server NOW (Ctrl+C). Waiting for crash...")
-        kill_task: Optional[asyncio.Task] = None
-        if auto_kill_pid is not None:
-            kill_task = asyncio.create_task(_kill_after_delay(auto_kill_pid, auto_kill_delay))
-        force_killed = False
-        while True:
-            if reader.done():
-                try:
-                    await reader
-                except Exception as exc:
-                    print(f"[manual-3.1] Read failed as expected due to crash: {exc}")
-                    force_killed = True
-                    break
-                else:
-                    print("[manual-3.1] Read still succeeded; restarting read...")
-                    await asyncio.sleep(0.2)
-                    break
-                finally:
-                    if kill_task:
-                        kill_task.cancel()
-                        with suppress(asyncio.CancelledError):
-                            await kill_task
-            await asyncio.sleep(0.1)
-        if force_killed:
-            break
+    await asyncio.to_thread(
+        input,
+        ">>> Kill the AFS server (Ctrl+C/close terminal). "
+        "Press Enter here once it is down (if auto-kill is armed, wait for it to run)...",
+    )
 
     await asyncio.to_thread(
         input,
@@ -106,34 +116,13 @@ def parse_args() -> argparse.Namespace:
         help="Local dataset used to build the payload.",
     )
     parser.add_argument("--target-bytes", type=int, default=20_000_000, help="Target payload size.")
-    parser.add_argument(
-        "--auto-kill-pid",
-        type=int,
-        default=None,
-        help="PID of the server process to automatically SIGKILL after the prompt (optional).",
-    )
-    parser.add_argument(
-        "--auto-kill-delay",
-        type=float,
-        default=2.0,
-        help="Delay in seconds before auto-killing the PID (requires --auto-kill-pid).",
-    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     try:
-        asyncio.run(
-            manual_case31(
-                args.path,
-                args.address,
-                args.dataset,
-                args.target_bytes,
-                args.auto_kill_pid,
-                args.auto_kill_delay,
-            )
-        )
+        asyncio.run(manual_case31(args.path, args.address, args.dataset, args.target_bytes))
     except KeyboardInterrupt:
         print("\nInterrupted by user")
 
