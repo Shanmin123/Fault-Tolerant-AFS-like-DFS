@@ -22,7 +22,7 @@ async def recv_msg(reader: asyncio.StreamReader):
     return pickle.loads(payload)
 
 
-HOST = 'localhost'
+HOST = '127.0.0.1' #localhost
 PORT = 5000
 SNAPSHOT_LATEST = "snapshots/snapshot_latest.pkl"
 #safety margin for state recovery
