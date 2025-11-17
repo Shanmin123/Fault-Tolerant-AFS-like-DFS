@@ -144,6 +144,20 @@ def make_payload(tag: str, lines: int) -> bytes:
     return "\n".join(f"{tag}-{i}" for i in range(lines)).encode("utf-8")
 
 
+def load_payload_from_file(file_path: str) -> bytes:
+    try:
+        with open(file_path, "rb") as handle:
+            return handle.read()
+    except OSError as exc:
+        raise RuntimeError(f"Failed to read payload file '{file_path}': {exc}") from exc
+
+
+def resolve_payload(file_path: Optional[str], fallback_lines: int, tag: str) -> bytes:
+    if file_path:
+        return load_payload_from_file(file_path)
+    return make_payload(tag, fallback_lines)
+
+
 async def fetch_from(address: str, path: str) -> bytes:
     resp = await call_rpc_once(address, "GetFile", {"path": path})
     if resp.get("code", 1) != 0:
@@ -208,15 +222,13 @@ async def bootstrap_file(rpc: FailoverRPC, path: str, payload: bytes) -> Tuple[i
 async def manual_failover(
     path: str,
     addresses: List[str],
-    base_lines: int,
-    failover_lines: int,
+    baseline_payload: bytes,
+    failover_payload: bytes,
 ) -> None:
     cluster = ManualCluster(addresses)
     rpc = FailoverRPC(cluster)
-    base_payload = make_payload("replication-initial", base_lines)
-    failover_payload = make_payload("replication-failover", failover_lines)
 
-    version, leader, baseline = await bootstrap_file(rpc, path, base_payload)
+    version, leader, baseline = await bootstrap_file(rpc, path, baseline_payload)
     await wait_for_consistency(addresses, path, baseline)
     print(f"[manual] baseline replicated via {leader} for {path}")
 
@@ -258,15 +270,46 @@ def parse_args() -> argparse.Namespace:
         default=["127.0.0.1:8888", "127.0.0.1:8889", "127.0.0.1:8890"],
         help="Addresses of the already-running Raft servers.",
     )
-    parser.add_argument("--base-lines", type=int, default=64, help="Baseline payload size before failover.")
-    parser.add_argument("--failover-lines", type=int, default=60000, help="Payload size used during failover write.")
+    parser.add_argument(
+        "--payload-file",
+        help="Optional payload file used for both the baseline and failover writes.",
+    )
+    parser.add_argument(
+        "--baseline-file",
+        help="Payload file for the baseline write. Overrides --payload-file.",
+    )
+    parser.add_argument(
+        "--failover-file",
+        help="Payload file for the failover write. Overrides --payload-file.",
+    )
+    parser.add_argument(
+        "--base-lines",
+        type=int,
+        default=64,
+        help="Baseline payload size before failover (used only if no baseline file is provided).",
+    )
+    parser.add_argument(
+        "--failover-lines",
+        type=int,
+        default=60000,
+        help="Payload size used during failover write (used only if no failover file is provided).",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    baseline_file = args.baseline_file or args.payload_file
+    failover_file = args.failover_file or args.payload_file
     try:
-        asyncio.run(manual_failover(args.path, args.addresses, args.base_lines, args.failover_lines))
+        baseline_payload = resolve_payload(baseline_file, args.base_lines, "replication-initial")
+        failover_payload = resolve_payload(failover_file, args.failover_lines, "replication-failover")
+    except RuntimeError as exc:
+        print(exc)
+        return
+
+    try:
+        asyncio.run(manual_failover(args.path, args.addresses, baseline_payload, failover_payload))
     except KeyboardInterrupt:
         print("\nInterrupted by user")
 

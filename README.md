@@ -204,8 +204,13 @@ python -m AFS.raft.server server3 127.0.0.1 8890 127.0.0.1:8888 127.0.0.1:8889
 # Terminal 4 (follow prompts; kill/restart servers manually when asked)
 python -m tc4_manual_flow \
   --path /tests/outputs/tc4_manual.txt \
-  --addresses 127.0.0.1:8888 127.0.0.1:8889 127.0.0.1:8890
+  --addresses 127.0.0.1:8888 127.0.0.1:8889 127.0.0.1:8890 \
+  --payload-file tests/data/input_0.txt
 ```
+You can point the helper at different payloads:
+- `--payload-file file.txt` uses the same file for both the baseline and failover writes.
+- `--baseline-file file.txt` / `--failover-file other.txt` let you control them separately.  
+If you omit these flags the helper falls back to the built-in generated payload sizes.
 
 ### 4. Distributed Prime Finder FT
 
