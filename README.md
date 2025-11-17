@@ -21,6 +21,12 @@ This is a distributed systems project composed of two main parts:
 
 **Before test**
 ```bash
+# nagivate to project file on VM
+# '/Doanloads/DS_coursework'
+cd Downloads
+cd DS-2025-Group-coursework1
+```
+```bash
 # clean cache
 rm -rf AFS/srv_data/
 rm -rf AFS/cache/
