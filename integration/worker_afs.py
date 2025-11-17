@@ -108,12 +108,13 @@ class AFSWorker:
       #send id to coor not receive allocation
       hello_msg = {"type": "hello", "workerid": self.worker_id}
       await send_msg(writer, hello_msg)
-    except (ConnectionRefusedError, OSError):
-      print(f"[Worker {self.worker_id}] Connection Refused. Assuming job is done.")
-      raise
     except Exception as e:
-      print(f"Connection failed: {e}")
-      return
+      err_str = str(e)
+      if "Connect call failed" in err_str or "Connection refused" in err_str or "[Errno 111]" in err_str or "[Errno 61]" in err_str:
+          raise ConnectionRefusedError("Coordinator unreachable")
+      else:
+          print(f"Connection failed with unexpected error: {e}")
+          return # 或者 raise
     
     marker_queue = asyncio.Queue()
     task_queue = asyncio.Queue()
