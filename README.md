@@ -26,9 +26,13 @@ rm -rf AFS/srv_data/
 rm -rf AFS/cache/
 rm -rf srv_data/
 rm -rf integration/cache/
+rm -rf cache
 
 # create files if not exist
 mkdir -p tests/data/
+
+# if use example input files
+python -m upload
 ```
 
 ### 1. Basic Functionality
@@ -205,9 +209,10 @@ python -m tc4_manual_flow \
 python -m AFS.run_afs_server
 
 # Terminal 2
-# create a file including 10000 numbers
+# create a file including 10000 numbers if not using example files
 python -m generate_10000
 
+# Note: remember to put the correct input file name you'd like to run
 python -m integration.coordinator_afs \
   --input /tests/data/input_large.txt \
   --output /tests/outputs/result_large.txt \
@@ -222,6 +227,7 @@ Then `Ctrl+C` manully kill the process
 Restart the terminal
 ```bash
 # Terminal 2
+# Note: remember to put the correct input file name you'd like to run
 python -m integration.coordinator_afs \
   --input /tests/data/input_large.txt \
   --output /tests/outputs/result_large.txt
@@ -240,9 +246,10 @@ Then wail til exeucation successfully completed.
 python -m AFS.run_afs_server
 
 # Terminal 2
-# create a file including 10000 numbers
+# create a file including 10000 numbers if not using example files
 python -m generate_10000
 
+# Note: remember to put the correct input file name you'd like to run
 python -m integration.coordinator_afs \
   --input /tests/data/input_large.txt \
   --output /tests/outputs/result_large.txt \
@@ -266,10 +273,11 @@ You should see log in such format:
 python -m AFS.run_afs_server
 
 # Terminal 2
-# create a file including 10000 numbers
+# create a file including 10000 numbers if not using example files
 python -m generate_10000
 
 # start at least 2 works
+# Note: remember to put the correct input file name you'd like to run
 python -m integration.coordinator_afs \
   --input /tests/data/input_large.txt \
   --output /tests/outputs/result_large.txt \
