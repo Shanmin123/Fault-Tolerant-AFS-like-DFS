@@ -149,7 +149,7 @@ python -m AFS.run_afs_server 127.0.0.1 8888
 python -m tc31_manual_flow \
   --path /tests/data/tc31_manual_ctrl.txt \
   --address 127.0.0.1:8888 \
-  --target-bytes 80000000 
+  --target-bytes 800000 
 
 
 ```
