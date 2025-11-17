@@ -108,7 +108,7 @@ class AFSWorker:
       #send id to coor not receive allocation
       hello_msg = {"type": "hello", "workerid": self.worker_id}
       await send_msg(writer, hello_msg)
-    except ConnectionRefusedError:
+    except (ConnectionRefusedError, OSError):
       print(f"[Worker {self.worker_id}] Connection Refused. Assuming job is done.")
       raise
     except Exception as e:
