@@ -54,7 +54,7 @@ class FailoverRPC:
         args: Dict,
         *,
         prefer: Optional[str] = None,
-        attempts: int = 20,
+        attempts: int = 60,
         use_op_id: bool = False,
     ) -> Tuple[Dict, str]:
         op_token = f"{op}-{uuid.uuid4()}" if use_op_id else None
