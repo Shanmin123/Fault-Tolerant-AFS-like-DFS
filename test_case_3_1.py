@@ -12,7 +12,7 @@ from AFS.rpc.client import RPCClient
 HOST = "127.0.0.1"
 PROJECT_ROOT = Path(__file__).resolve().parent
 WORK_DIR = PROJECT_ROOT / ".case3.1"
-TEST_DATA_FILE = PROJECT_ROOT / "tests/data/test10000.txt"
+TEST_DATA_FILE = PROJECT_ROOT / "tests/data/input_out10.txt" 
 TARGET_PAYLOAD_BYTES = 20_000_000  # ~20 MB to keep read in-flight without timeouts
 READ_CRASH_DELAY = 3  
 SERVER_BOOT_DELAY = 1.0

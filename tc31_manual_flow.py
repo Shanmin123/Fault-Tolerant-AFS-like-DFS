@@ -112,7 +112,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--dataset",
         type=Path,
-        default=Path("tests/data/test10000.txt"),
+        default=Path("tests/data/input_out10.txt"),
         help="Local dataset used to build the payload.",
     )
     parser.add_argument("--target-bytes", type=int, default=20_000_000, help="Target payload size.")
