@@ -310,8 +310,8 @@ async def main():
   print(f"  Output AFS Path: {output_path}")
 
   afs_servers = ["127.0.0.1:8888" 
-                 #"127.0.0.1:8889", 
-                 #"127.0.0.1:8890"
+                 "127.0.0.1:8889", 
+                 "127.0.0.1:8890"
                  ]
   coordinator = AFSCoordinator(afs_servers)
   try:

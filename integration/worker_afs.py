@@ -244,9 +244,7 @@ class AFSWorker:
 
 
 async def main(worker_id):
-  afs_servers = [
-    "127.0.0.1:8888" 
-    ]
+  afs_servers = ["127.0.0.1:8888", "127.0.0.1:8889", "127.0.0.1:8890"]
   
   #loop to keep working until no tasks are left
   while True:
