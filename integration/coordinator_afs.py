@@ -24,7 +24,7 @@ async def recv_msg(reader: asyncio.StreamReader):
     return pickle.loads(payload)
 
 HOST = 'localhost'
-PORT = 5000
+PORT = 5001
 NUM_WORKERS = None
 SNAPSHOT_NAME = "coordinator_global_snapshot"
 
@@ -213,7 +213,7 @@ class AFSCoordinator:
         writer.close()
         await writer.wait_closed()
 
-  async def run(self, input_path: str, output_path: str):
+  async def run(self, input_paths: List[str], output_path: str):
     await self.initialize_afs()
 
     try:
@@ -239,8 +239,20 @@ class AFSCoordinator:
       print(f"Restored state: {self.finished_tasks_count}/{self.total_tasks} tasks done. {len(self.primes)} primes found.")
     except Exception as e:
       print(f"No snapshot found ({e}), starting fresh.")
-      numbers = await self.read_from_afs(input_path)
-      self.tasks = self.split_numbers(numbers, NUM_WORKERS)
+      all_numbers = []
+      print(f"Reading from {len(input_paths)} input files...")
+      for path in input_paths:
+          try:
+              print(f"  Reading {path}...")
+              nums = await self.read_from_afs(path)
+              all_numbers.extend(nums)
+          except Exception as read_err:
+              print(f"  Error reading {path}: {read_err}. Skipping.")
+      
+      if not all_numbers:
+          print("Error: No numbers read from any input files!")
+          return
+      self.tasks = self.split_numbers(all_numbers, NUM_WORKERS)
       self.total_tasks = len(self.tasks)
       self.finished_tasks_count = 0
       self.primes = set()
@@ -284,9 +296,18 @@ async def main():
 
   if "--input" in sys.argv:
     try:
-      input_path = sys.argv[sys.argv.index("--input") + 1]
-    except IndexError:
-      print("Error: --input flag requires an argument")
+      input_paths = []
+      start_index = sys.argv.index("--input") + 1
+      for i in range(start_index, len(sys.argv)):
+          if sys.argv[i].startswith("--"):
+              break
+          input_paths.append(sys.argv[i])
+      
+      if not input_paths:
+          print("Error: --input flag requires at least one argument")
+          sys.exit(1)
+    except Exception as e:
+      print(f"Error parsing inputs: {e}")
       sys.exit(1)
   
   if "--output" in sys.argv:
@@ -295,6 +316,14 @@ async def main():
     except IndexError:
       print("Error: --output flag requires an argument")
       sys.exit(1)
+  
+  global HOST
+  HOST = '0.0.0.0'
+  if "--host" in sys.argv:
+      try:
+        HOST = sys.argv[sys.argv.index("--host") + 1]
+      except IndexError:
+        pass
   global NUM_WORKERS
   if "--workers" in sys.argv:
     idx = sys.argv.index("--workers") + 1
@@ -305,17 +334,17 @@ async def main():
   else:
     NUM_WORKERS = 4
 
-  print(f"Coordinator starting with:")
-  print(f"  Input AFS Path:  {input_path}")
+  print(f"Coordinator starting on {HOST}:{PORT}")
+  print(f"  Input AFS Path:  {', '.join(input_paths)}")
   print(f"  Output AFS Path: {output_path}")
 
-  afs_servers = ["127.0.0.1:8888" 
+  afs_servers = ["127.0.0.1:8888", 
                  "127.0.0.1:8889", 
                  "127.0.0.1:8890"
                  ]
   coordinator = AFSCoordinator(afs_servers)
   try:
-    await coordinator.run(input_path=input_path, output_path=output_path)
+    await coordinator.run(input_paths=input_paths, output_path=output_path)
   except KeyboardInterrupt:
     pass
   except Exception as e:
