@@ -1,4 +1,4 @@
-# DS-2025-Group-coursework1
+# Raft-backed AFS-like Distributed File System
 
 This is a distributed systems project composed of two main parts:
 1. AFS/Raft: A distributed file system built with the Raft consensus protocol
